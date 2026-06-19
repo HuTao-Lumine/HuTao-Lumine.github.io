@@ -4,7 +4,7 @@
 // @version      1.2
 // @description  Tự động giải và điền đáp án bài kiểm tra bằng AI.
 // @author       You
-// @match        *://*/*
+// @match        *://*.coursera.org/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
