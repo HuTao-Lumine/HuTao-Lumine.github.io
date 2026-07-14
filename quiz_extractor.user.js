@@ -17,13 +17,22 @@
     // 1. UI Khung chính
     const mainUI = document.createElement('div');
     mainUI.style.position = 'fixed';
-    mainUI.style.top = '20px';
+    mainUI.style.top = '80px';
     mainUI.style.right = '20px';
-    mainUI.style.zIndex = 10000;
+    mainUI.style.zIndex = '2147483647'; // Giá trị tối đa của z-index (32-bit integer)
     mainUI.style.display = 'flex';
     mainUI.style.flexDirection = 'column';
     mainUI.style.alignItems = 'flex-end';
     document.body.appendChild(mainUI);
+
+    // Đảm bảo UI luôn nằm trên cùng (tránh bị che khi Coursera chuyển trang SPA hoặc mở modal full-screen)
+    setInterval(() => {
+        if (!document.body.contains(mainUI)) {
+            document.body.appendChild(mainUI);
+        } else if (document.body.lastElementChild !== mainUI && !mainUI.contains(document.activeElement)) {
+            document.body.appendChild(mainUI);
+        }
+    }, 1000);
 
     // Nút "T" thu nhỏ/phóng to (Draggable)
     const toggleBtn = document.createElement('div');
@@ -67,6 +76,13 @@
         <button id="auto-answer-btn" style="width: 100%; padding: 10px; background-color: #0056D2; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Trả lời</button>
     `;
     mainUI.appendChild(setupUI);
+
+    // Ngăn Coursera chặn phím, cướp focus (Focus Trap) hay sự kiện chuột khi đang gõ vào ô nhập API/Model
+    ['focusin', 'focusout', 'focus', 'blur', 'mousedown', 'mouseup', 'click', 'keydown', 'keyup', 'keypress', 'input', 'paste'].forEach(evt => {
+        setupUI.addEventListener(evt, (e) => {
+            e.stopPropagation();
+        });
+    });
 
     // Logic Kéo Thả (Drag and Drop) cho Nút T
     let isDragging = false;
