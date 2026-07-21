@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Palworld Smart Paldex & Advanced Filter</title>
+    
+    <!-- Google Fonts: Outfit & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet CSS for Interactive Maps -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+    
+    <!-- Vanilla CSS -->
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header Section -->
+        <header class="app-header">
+            <div class="header-brand">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-dragon"></i>
+                </div>
+                <div>
+                    <h1 class="brand-title">Palworld <span class="highlight">Smart Paldex</span></h1>
+                    <p class="brand-subtitle">Bộ lọc & Sắp xếp Pal thông minh (Dữ liệu chuẩn Paldb 299 Pal)</p>
+                </div>
+            </div>
+            <div class="header-stats">
+                <div class="stat-pill">
+                    <i class="fa-solid fa-layer-group"></i>
+                    <span>Hiển thị: <strong id="visible-count">0</strong> / <span id="total-count">299</span> Pal</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Mode Navigation Tabs (Pals vs Maps) -->
+        <div class="mode-navigation">
+            <button id="tab-btn-pals" class="mode-tab-btn active" data-mode="pals">
+                <i class="fa-solid fa-paw"></i> <span>Pals (Lọc & Sắp xếp)</span>
+            </button>
+            <button id="tab-btn-maps" class="mode-tab-btn" data-mode="maps">
+                <i class="fa-solid fa-map-marked-alt"></i> <span>Maps (Bản đồ Vị trí Pals)</span>
+            </button>
+        </div>
+
+        <!-- PALS TAB VIEW -->
+        <div id="view-pals" class="tab-view active">
+            <!-- Main Toolbar Section -->
+            <section class="toolbar-section glass-panel">
+            <!-- Search and Sort Top Row -->
+            <div class="toolbar-top">
+                <div class="search-box">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                    <input type="text" id="search-input" placeholder="Nhập tên Pal hoặc mã số #ID (VD: Lamball, 1, Jetragon...)..." autocomplete="off">
+                    <button id="clear-search" class="clear-btn hidden"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="sort-box">
+                    <label for="sort-select"><i class="fa-solid fa-arrow-down-short-wide"></i> Sắp xếp theo:</label>
+                    <select id="sort-select">
+                        <option value="id-asc">#ID (Mặc định tăng dần)</option>
+                        <option value="id-desc">#ID (Giảm dần)</option>
+                        <option value="hp-desc">❤️ HP cơ bản (Cao nhất)</option>
+                        <option value="atk-desc">⚔️ Tấn công - ATK (Cao nhất)</option>
+                        <option value="def-desc">🛡️ Phòng thủ - DEF (Cao nhất)</option>
+                        <option value="speed-desc">⚡ Tốc độ cưỡi - Mount Speed (Nhanh nhất)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Quick Filters & Element Row -->
+            <div class="filter-section">
+                <div class="filter-group-header">
+                    <span class="group-title"><i class="fa-solid fa-fire-flame-curved"></i> Lọc theo Hệ (Element):</span>
+                    <div class="logic-toggle" title="Chọn cách kết hợp khi chọn nhiều hệ">
+                        <span>Chế độ:</span>
+                        <button id="element-logic-or" class="logic-btn active">HOẶC (OR)</button>
+                        <button id="element-logic-and" class="logic-btn">VÀ (AND)</button>
+                    </div>
+                </div>
+                <div class="element-chips" id="element-filters">
+                    <button class="chip element-chip active" data-element="all">
+                        <i class="fa-solid fa-border-all"></i> Tất cả Hệ
+                    </button>
+                    <button class="chip element-chip" data-element="neutral" style="--el-color: #9ca3af;">
+                        <img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_Icon_element_s_00.webp" class="filter-icon" alt="Neutral"> Neutral (Thường)
+                    </button>
+                    <button class="chip element-chip" data-element="fire" style="--el-color: #f97316;">
+                        <img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_Icon_element_s_01.webp" class="filter-icon" alt="Fire"> Fire (Lửa)
+                    </button>
+                    <button class="chip element-chip" data-element="water" style="--el-color: #38bdf8;">
+                        <img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_Icon_element_s_02.webp" class="filter-icon" alt="Water"> Water (Nước)
+                    </button>
+                    <button class="chip element-chip" data-element="electric" style="--el-color: #eab308;">
+                        <img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_Icon_element_s_03.webp" class="filter-icon" alt="Electric"> Electric (Điện)
+                    </button>
+                    <button class="chip element-chip" data-element="grass" style="--el-color: #22c55e;">
+                        <img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_Icon_element_s_04.webp" class="filter-icon" alt="Grass"> Grass (Cỏ)
+                    </button>
+                    <button class="chip element-chip" data-element="ice" style="--el-color: #67e8f9;">
+                        <img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_Icon_element_s_08.webp" class="filter-icon" alt="Ice"> Ice (Băng)
+                    </button>
+                    <button class="chip element-chip" data-element="ground" style="--el-color: #b45309;">
+                        <img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_Icon_element_s_07.webp" class="filter-icon" alt="Ground"> Ground (Đất)
+                    </button>
+                    <button class="chip element-chip" data-element="dark" style="--el-color: #a855f7;">
+                        <img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_Icon_element_s_05.webp" class="filter-icon" alt="Dark"> Dark (Bóng tối)
+                    </button>
+                    <button class="chip element-chip" data-element="dragon" style="--el-color: #ec4899;">
+                        <img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_Icon_element_s_06.webp" class="filter-icon" alt="Dragon"> Dragon (Rồng)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Work Suitabilities Filter -->
+            <div class="filter-section mt-3">
+                <div class="filter-group-header">
+                    <span class="group-title"><i class="fa-solid fa-hammer"></i> Kỹ năng làm việc tại Trại (Work Suitability):</span>
+                    <div class="work-level-selector">
+                        <label for="work-sort-order"><i class="fa-solid fa-arrow-down-9-1"></i> Sắp xếp cấp độ:</label>
+                        <select id="work-sort-order">
+                            <option value="desc">Từ lớn đến nhỏ (Cao -> Thấp)</option>
+                            <option value="asc">Từ nhỏ đến lớn (Thấp -> Cao)</option>
+                            <option value="none">Không sắp xếp theo cấp độ</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="work-chips" id="work-filters">
+                    <button class="chip work-chip" data-work="kindling"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_00.webp" class="filter-icon" alt="Kindling"> Nhóm lửa</button>
+                    <button class="chip work-chip" data-work="watering"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_01.webp" class="filter-icon" alt="Watering"> Tưới nước</button>
+                    <button class="chip work-chip" data-work="planting"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_02.webp" class="filter-icon" alt="Planting"> Gieo hạt</button>
+                    <button class="chip work-chip" data-work="generating electricity"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_03.webp" class="filter-icon" alt="Generating Electricity"> Phát điện</button>
+                    <button class="chip work-chip" data-work="handiwork"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_04.webp" class="filter-icon" alt="Handiwork"> Thủ công</button>
+                    <button class="chip work-chip" data-work="gathering"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_05.webp" class="filter-icon" alt="Gathering"> Thu thập</button>
+                    <button class="chip work-chip" data-work="lumbering"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_06.webp" class="filter-icon" alt="Lumbering"> Chặt cây</button>
+                    <button class="chip work-chip" data-work="mining"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_07.webp" class="filter-icon" alt="Mining"> Khai khoáng</button>
+                    <button class="chip work-chip" data-work="medicine production"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_08.webp" class="filter-icon" alt="Medicine Production"> Chế thuốc</button>
+                    <button class="chip work-chip" data-work="cooling"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_10.webp" class="filter-icon" alt="Cooling"> Làm lạnh</button>
+                    <button class="chip work-chip" data-work="transporting"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_11.webp" class="filter-icon" alt="Transporting"> Vận chuyển</button>
+                    <button class="chip work-chip" data-work="farming"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_12.webp" class="filter-icon" alt="Farming"> Chăn thả</button>
+                </div>
+            </div>
+
+            <!-- Quick Action Buttons -->
+            <div class="filter-actions mt-3">
+                <button id="toggle-mount-only" class="action-btn toggle-btn">
+                    <i class="fa-solid fa-horse"></i> Chỉ hiện Thú cưỡi (Has Mount Speed)
+                </button>
+                <button id="reset-filters" class="action-btn reset-btn">
+                    <i class="fa-solid fa-rotate-right"></i> Đặt lại tất cả bộ lọc
+                </button>
+            </div>
+        </section>
+
+        <!-- Main Pal Grid -->
+        <main class="grid-section">
+            <div id="loading-spinner" class="loading-container">
+                <div class="spinner"></div>
+                <p>Đang tải dữ liệu 299 Pal từ hệ thống...</p>
+            </div>
+            
+            <div id="no-results" class="no-results hidden">
+                <i class="fa-regular fa-folder-open empty-icon"></i>
+                <h3>Không tìm thấy Pal nào phù hợp với bộ lọc</h3>
+                <p>Hãy thử giảm bớt điều kiện lọc hoặc từ khóa tìm kiếm của bạn.</p>
+                <button id="empty-reset-btn" class="reset-btn mt-2"><i class="fa-solid fa-rotate-right"></i> Đặt lại bộ lọc</button>
+            </div>
+
+            <div id="pal-grid" class="pal-grid hidden">
+                <!-- Pal cards dynamic injected via JS -->
+            </div>
+        </main>
+        </div>
+
+        <!-- MAPS TAB VIEW -->
+        <div id="view-maps" class="tab-view hidden">
+            <!-- Map Controls Top Bar -->
+            <section class="map-controls-panel glass-panel">
+                <div class="map-toolbar">
+                    <div class="map-selector-group">
+                        <span class="control-label"><i class="fa-solid fa-map"></i> Chọn Bản Đồ Game:</span>
+                        <div class="map-buttons">
+                            <button class="map-btn active" data-map="palpagos">
+                                <i class="fa-solid fa-earth-oceania"></i> Palpagos Islands (Bản đồ Chính)
+                            </button>
+                            <button class="map-btn" data-map="world_tree">
+                                <i class="fa-solid fa-tree"></i> The World Tree (Sakurajima)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="pal-picker-group">
+                        <span class="control-label"><i class="fa-solid fa-magnifying-glass-location"></i> Tìm vị trí Pal:</span>
+                        <div class="pal-search-dropdown">
+                            <input type="text" id="map-pal-search" placeholder="Gõ tên Pal hoặc #ID để tìm nhanh trên bản đồ..." autocomplete="off">
+                            <select id="map-pal-select" class="pal-select-box">
+                                <option value="">-- Chọn 1 Pal từ 299 Pal để xem vị trí --</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="map-filters-row mt-3">
+                    <span class="control-label"><i class="fa-solid fa-filter"></i> Lọc điểm xuất hiện:</span>
+                    <div class="spawn-filter-chips">
+                        <button class="chip spawn-chip active" data-spawn="day">
+                            <i class="fa-solid fa-sun text-warning"></i> Ban ngày (<span id="spawn-count-day">0</span>)
+                        </button>
+                        <button class="chip spawn-chip active" data-spawn="night">
+                            <i class="fa-solid fa-moon text-info"></i> Ban đêm (<span id="spawn-count-night">0</span>)
+                        </button>
+                        <button class="chip spawn-chip active" data-spawn="boss">
+                            <i class="fa-solid fa-skull text-danger"></i> Boss / Alpha (<span id="spawn-count-boss">0</span>)
+                        </button>
+                        <button id="clear-map-pal" class="chip reset-chip hidden">
+                            <i class="fa-solid fa-rotate-right"></i> Bỏ chọn Pal
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Alert banner khi bản đồ này không có mà bản đồ khác lại có -->
+                <div id="cross-map-alert" class="cross-map-banner hidden">
+                    <div class="alert-icon"><i class="fa-solid fa-bell"></i></div>
+                    <div class="alert-message">
+                        <strong id="alert-pal-name">Pal này</strong> không xuất hiện trên <span id="alert-current-map">Palpagos Islands</span>, nhưng có vị trí xuất hiện trên <span id="alert-target-map">The World Tree</span>!
+                    </div>
+                    <button id="switch-map-btn" class="switch-map-btn">
+                        Chuyển sang bản đồ kia ngay <i class="fa-solid fa-arrow-right-long"></i>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Leaflet Map Container -->
+            <section class="map-display-section glass-panel mt-3">
+                <div class="map-header-info">
+                    <span id="current-map-title"><i class="fa-solid fa-map-location-dot"></i> Bản đồ: <strong>Palpagos Islands</strong> (Main Map)</span>
+                    <span id="selected-pal-info" class="selected-pal-badge hidden">
+                        <img id="map-pal-icon" src="" class="mini-icon" alt=""> <span id="map-pal-name">---</span>
+                    </span>
+                </div>
+                <!-- Khung Tọa độ XY xung quanh bản đồ cho Debug -->
+                <div id="map-xy-debug-bar" class="map-xy-debug-bar">
+                    <div class="xy-debug-item">
+                        <i class="fa-solid fa-crosshairs text-info"></i> Tọa độ Chuột (X, Y): <strong id="debug-mouse-xy">--- , ---</strong>
+                    </div>
+                    <div class="xy-debug-item">
+                        <i class="fa-solid fa-border-all text-warning"></i> Ô gạch (Tile Z<span id="debug-zoom-level">1</span>): <strong id="debug-tile-index">[-, -]</strong>
+                    </div>
+                    <div class="xy-debug-item">
+                        <i class="fa-solid fa-map-pin text-success"></i> Tâm bản đồ (Center): <strong id="debug-center-xy">--- , ---</strong>
+                    </div>
+                </div>
+                <div id="leaflet-map" class="interactive-map"></div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="pal-modal" class="modal-overlay hidden">
+        <div class="modal-content glass-panel">
+            <button id="close-modal" class="modal-close"><i class="fa-solid fa-xmark"></i></button>
+            <div id="modal-body">
+                <!-- Modal details injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <!-- Data Bundles fallback (Tránh lỗi CORS khi chạy local file://) -->
+    <script src="data/pals_bundle.js"></script>
+    <script src="data/map_spawn_bundle.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
