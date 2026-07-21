@@ -40,13 +40,16 @@
             </div>
         </header>
 
-        <!-- Mode Navigation Tabs (Pals vs Maps) -->
+        <!-- Mode Navigation Tabs (Pals vs Maps vs Passives) -->
         <div class="mode-navigation">
             <button id="tab-btn-pals" class="mode-tab-btn active" data-mode="pals">
                 <i class="fa-solid fa-paw"></i> <span>Pals (Lọc & Sắp xếp)</span>
             </button>
             <button id="tab-btn-maps" class="mode-tab-btn" data-mode="maps">
                 <i class="fa-solid fa-map-marked-alt"></i> <span>Maps (Bản đồ Vị trí Pals)</span>
+            </button>
+            <button id="tab-btn-passives" class="mode-tab-btn" data-mode="passives">
+                <i class="fa-solid fa-shield-halved"></i> <span>Passive Skills (Kỹ năng bị động)</span>
             </button>
         </div>
 
@@ -260,6 +263,49 @@
                 <div id="leaflet-map" class="interactive-map"></div>
             </section>
         </div>
+
+        <!-- PASSIVES TAB VIEW -->
+        <div id="view-passives" class="tab-view hidden">
+            <section class="toolbar-section glass-panel">
+                <div class="toolbar-top">
+                    <div class="search-box">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="passives-search" placeholder="🔍 Nhập tên Kỹ năng bị động hoặc thông số hiệu ứng (VD: Legend, Thần tốc, Tấn công+)..." autocomplete="off">
+                    </div>
+                    <div class="sort-box">
+                        <label for="passives-sort"><i class="fa-solid fa-arrow-up-z-a"></i> Sắp xếp theo:</label>
+                        <select id="passives-sort" class="sort-select">
+                            <option value="tier_desc">Cấp độ / Phẩm chất (Rank 5 -> Rank -3 giảm dần) - Mặc định</option>
+                            <option value="tier_asc">Cấp độ / Phẩm chất (Rank -3 -> Rank 5 tăng dần)</option>
+                            <option value="name_asc">Tên Kỹ Năng (A -> Z)</option>
+                            <option value="name_desc">Tên Kỹ Năng (Z -> A)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="filters-row mt-3" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <div class="filter-group">
+                        <span class="filter-label"><i class="fa-solid fa-layer-group"></i> Nhóm kỹ năng:</span>
+                        <div class="filter-chips">
+                            <button class="chip passive-category-chip active" data-cat="pal">
+                                <i class="fa-solid fa-paw"></i> Dành cho Pal (114 Kỹ năng)
+                            </button>
+                            <button class="chip passive-category-chip" data-cat="all">
+                                <i class="fa-solid fa-globe"></i> Tất cả trong game (309 Kỹ năng)
+                            </button>
+                        </div>
+                    </div>
+                    <div class="stat-pill" style="margin:0;">
+                        <i class="fa-solid fa-list-check"></i>
+                        <span>Hiển thị: <strong id="passives-visible-count">114</strong> / <span id="passives-total-count">309</span> Kỹ năng</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="passives-grid-section mt-4">
+                <div id="passives-grid" class="passives-grid"></div>
+            </section>
+        </div>
     </div>
 
     <!-- Detail Modal -->
@@ -277,6 +323,7 @@
     <!-- Data Bundles fallback (Tránh lỗi CORS khi chạy local file://) -->
     <script src="data/pals_bundle.js"></script>
     <script src="data/map_spawn_bundle.js"></script>
+    <script src="data/passives_bundle.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

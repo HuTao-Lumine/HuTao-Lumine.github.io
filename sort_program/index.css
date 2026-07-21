@@ -717,6 +717,180 @@ body {
     gap: 0.6rem;
 }
 
+/* ==========================================================================
+   PARTNER SKILL STYLES (MODAL)
+   ========================================================================== */
+.partner-skill-card {
+    background: linear-gradient(135deg, rgba(88, 28, 135, 0.3) 0%, rgba(30, 41, 59, 0.85) 100%);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    border-radius: 12px;
+    padding: 14px;
+    margin-top: 8px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.partner-skill-desc {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    color: #e2e8f0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.partner-skill-desc i {
+    margin-top: 3px;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.partner-levels-box {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.partner-level-badge {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(168, 85, 247, 0.45);
+    color: #e9d5ff;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* ==========================================================================
+   ITEM DROPS & RANCHING STYLES (MODAL)
+   ========================================================================== */
+.modal-drops-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+    margin-bottom: 16px;
+}
+
+.drop-item-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: rgba(30, 41, 59, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 12px;
+    transition: all 0.25s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.drop-item-card:hover {
+    background: rgba(51, 65, 85, 0.9);
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(56, 189, 248, 0.2);
+}
+
+.drop-item-card.ranch-card {
+    border-color: rgba(16, 185, 129, 0.35);
+    background: linear-gradient(135deg, rgba(6, 78, 59, 0.35) 0%, rgba(30, 41, 59, 0.8) 100%);
+}
+
+.drop-item-card.ranch-card:hover {
+    border-color: #10b981;
+    box-shadow: 0 6px 18px rgba(16, 185, 129, 0.25);
+}
+
+.drop-item-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 4px;
+}
+
+.drop-item-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.drop-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.drop-item-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #f8fafc;
+    word-break: break-word;
+}
+
+.drop-item-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.drop-qty-badge, .drop-rate-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.8rem;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.drop-qty-badge {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.drop-rate-badge {
+    background: rgba(244, 63, 94, 0.15);
+    color: #fb7185;
+    border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.drop-item-levels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 2px;
+}
+
+.drop-level-badge {
+    background: rgba(16, 185, 129, 0.18);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 0.76rem;
+    font-family: monospace, sans-serif;
+}
+
+.empty-drop-text {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     body { padding: 1rem; }
@@ -1142,144 +1316,126 @@ body {
     animation: pulse-night-to-red 1.6s infinite ease-in-out;
 }
 
-/* Nút chuyển nhanh sang Bản đồ trên Thẻ Pal và trong Modal */
-.card-map-quick-btn {
-    background: rgba(56, 189, 248, 0.15);
-    border: 1px solid rgba(56, 189, 248, 0.4);
-    color: #38bdf8;
-    padding: 3px 8px;
-    border-radius: 6px;
+/* =========================================
+   PASSIVE SKILLS SECTION STYLES
+   ========================================= */
+.passives-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+    gap: 1.25rem;
+    padding-bottom: 3rem;
+}
+
+.passive-card {
+    background: rgba(30, 41, 59, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.passive-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+}
+
+.passive-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    gap: 0.5rem;
+}
+
+.passive-rank-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
     font-size: 0.75rem;
     font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 0.35rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }
 
-.card-map-quick-btn:hover {
-    background: #38bdf8;
-    color: #0f172a;
-    box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
-    transform: scale(1.05);
+.passive-rank-badge.rank-5 {
+    background: linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
-.modal-view-map-btn {
-    background: linear-gradient(135deg, #0284c7 0%, #3b82f6 100%);
-    border: 1px solid #60a5fa;
-    color: #fff;
-    padding: 12px 24px;
-    border-radius: 10px;
-    font-size: 1rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);
-    width: 100%;
+.passive-rank-badge.rank-4 {
+    background: linear-gradient(135deg, #d97706, #f59e0b);
+    color: #ffffff;
+    border: 1px solid rgba(251, 191, 36, 0.4);
 }
 
-.modal-view-map-btn:hover {
-    background: linear-gradient(135deg, #0369a1 0%, #2563eb 100%);
-    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
-    transform: translateY(-2px);
+.passive-rank-badge.rank-3 {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fcd34d;
+    border: 1px solid rgba(245, 158, 11, 0.35);
 }
 
-/* Container của Bản đồ nhúng ngay tại chỗ trong Modal */
-.modal-inline-map-box {
-    background: rgba(15, 23, 42, 0.98);
-    border: 2px solid rgba(56, 189, 248, 0.45);
-    border-radius: 14px;
-    padding: 14px;
-    text-align: left;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
-    animation: fadeInSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes fadeInSlideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-12px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.modal-map-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 12px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.modal-map-tabs {
-    display: flex;
-    gap: 8px;
-}
-
-.modal-map-tab-btn {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #cbd5e1;
-    padding: 6px 14px;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.modal-map-tab-btn.active {
-    background: linear-gradient(135deg, #0284c7, #2563eb);
-    border-color: #60a5fa;
-    color: #fff;
-    box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
-}
-
-.modal-spawn-filters {
-    display: flex;
-    gap: 12px;
-    font-size: 0.85rem;
-}
-
-.modal-spawn-filters span {
-    background: rgba(255, 255, 255, 0.06);
-    padding: 4px 10px;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+.passive-rank-badge.rank-normal {
+    background: rgba(148, 163, 184, 0.15);
     color: #e2e8f0;
+    border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
-.modal-leaflet-map {
-    width: 100%;
-    height: 440px;
+.passive-rank-badge.rank-negative {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.passive-cat-tag {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.6);
+    color: var(--text-muted);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.passive-cat-tag.pal {
+    color: #60a5fa;
+    border-color: rgba(96, 165, 250, 0.3);
+}
+
+.passive-name {
+    font-size: 1.08rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 0.6rem;
+    line-height: 1.35;
+    font-family: 'Outfit', sans-serif;
+}
+
+.passive-desc {
+    font-size: 0.88rem;
+    color: #cbd5e1;
+    line-height: 1.55;
+    background: rgba(15, 23, 42, 0.45);
+    padding: 0.75rem 0.9rem;
     border-radius: 10px;
-    border: 2px solid rgba(255, 255, 255, 0.14);
-    background: #1455a4 !important;
-    position: relative;
-    z-index: 10;
+    border-left: 3px solid #64748b;
 }
 
-.modal-leaflet-map.zoomed-out .pal-spawn-circle.day-circle {
-    animation: pulse-day-to-red 1.6s infinite ease-in-out;
-}
-
-.modal-leaflet-map.zoomed-out .pal-spawn-circle.night-circle {
-    animation: pulse-night-to-red 1.6s infinite ease-in-out;
-}
+.passive-card.tier-5 .passive-desc { border-left-color: #ec4899; }
+.passive-card.tier-4 .passive-desc { border-left-color: #f59e0b; }
+.passive-card.tier-3 .passive-desc { border-left-color: #fbbf24; }
+.passive-card.tier-negative .passive-desc { border-left-color: #ef4444; }
 
 @media (max-width: 768px) {
     .mode-navigation { flex-direction: column; }
@@ -1287,8 +1443,4 @@ body {
     .map-buttons { flex-direction: column; }
     .cross-map-banner { flex-direction: column; text-align: center; }
     .interactive-map { height: 480px; }
-    .modal-map-toolbar { flex-direction: column; align-items: stretch; text-align: center; }
-    .modal-map-tabs { justify-content: center; }
-    .modal-spawn-filters { justify-content: center; flex-wrap: wrap; }
-    .modal-leaflet-map { height: 350px; }
 }

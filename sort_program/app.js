@@ -78,6 +78,9 @@ async function initApp() {
         // Khởi tạo hệ thống Bản đồ (Dual Maps)
         initMapsSystem();
 
+        // Khởi tạo hệ thống Kỹ năng bị động (Passive Skills)
+        initPassivesSystem();
+
         // Lọc và render lần đầu
         applyFiltersAndRender();
 
@@ -257,12 +260,7 @@ function renderGrid(pals) {
                         <img loading="lazy" src="${imgUrl}" alt="${pal.name}" onerror="this.src='https://cdn.paldb.cc/image/Pal/Texture/PalIcon/Normal/T_SheepBall_icon_normal.webp'">
                     </div>
                     <div class="pal-header-info">
-                        <div class="pal-id-row" style="display:flex; justify-content:space-between; align-items:center;">
-                            <span class="pal-id">${idDisplay}</span>
-                            <button class="card-map-quick-btn" title="Xem vị trí xuất hiện trên Bản đồ" onclick="event.stopPropagation(); openPalModalAndMap('${pal.name.replace(/'/g, "\\'")}')">
-                                <i class="fa-solid fa-map-location-dot"></i> Bản đồ
-                            </button>
-                        </div>
+                        <span class="pal-id">${idDisplay}</span>
                         <h3 class="pal-name" title="${pal.name}">${pal.name}</h3>
                         <div class="pal-elements">${elemsHTML}</div>
                     </div>
@@ -476,6 +474,112 @@ function openPalModal(palName) {
         return `<span class="badge-work">${iconHTML} ${info.name}: <strong>Cấp ${wLevel}</strong></span>`;
     }).join("");
 
+    // Xử lý dữ liệu Drops (vật phẩm tiêu diệt) và Ranch Drops (vật phẩm chăn thả)
+    const hasRanch = (works.farming && works.farming > 0) || (pal.ranch_drops && pal.ranch_drops.length > 0);
+    const ranchDrops = pal.ranch_drops || [];
+    let ranchContentHTML = "";
+    if (ranchDrops.length > 0) {
+        const groupedRanch = {};
+        ranchDrops.forEach(d => {
+            if (!groupedRanch[d.name]) {
+                groupedRanch[d.name] = { name: d.name, image: d.image, levels: [] };
+            }
+            groupedRanch[d.name].levels.push(d);
+        });
+
+        ranchContentHTML = Object.values(groupedRanch).map(g => {
+            const levelsBadges = g.levels.map(l => {
+                const rateText = l.rate && l.rate !== "100%" ? ` (${l.rate})` : "";
+                return `<span class="drop-level-badge"><strong>Lv.${l.level}</strong>: ${l.quantity || "1"}${rateText}</span>`;
+            }).join("");
+
+            return `
+                <div class="drop-item-card ranch-card">
+                    <div class="drop-item-icon">
+                        <img src="${g.image || 'https://cdn.paldb.cc/image/Others/InventoryItemIcon/Texture/T_itemicon_Material_Wool.webp'}" alt="${g.name}" onerror="this.style.display='none'">
+                    </div>
+                    <div class="drop-item-info">
+                        <span class="drop-item-name">${g.name}</span>
+                        <div class="drop-item-levels">${levelsBadges}</div>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    } else if (hasRanch) {
+        ranchContentHTML = `<p class="empty-drop-text">Pal này có kỹ năng Chăn thả tại Ranch (Farming Cấp ${works.farming || 1}).</p>`;
+    }
+
+    const dropsList = pal.drops || [];
+    let dropsContentHTML = "";
+    if (dropsList.length > 0) {
+        dropsContentHTML = dropsList.map(d => `
+            <div class="drop-item-card">
+                <div class="drop-item-icon">
+                    <img src="${d.image || 'https://cdn.paldb.cc/image/Others/InventoryItemIcon/Texture/T_itemicon_Material_Wool.webp'}" alt="${d.name}" onerror="this.style.display='none'">
+                </div>
+                <div class="drop-item-info">
+                    <span class="drop-item-name">${d.name}</span>
+                    <div class="drop-item-details">
+                        <span class="drop-qty-badge"><i class="fa-solid fa-cubes"></i> Số lượng: <strong>${d.quantity || "1"}</strong></span>
+                        <span class="drop-rate-badge"><i class="fa-solid fa-percent"></i> Tỷ lệ: <strong>${d.rate || "100%"}</strong></span>
+                    </div>
+                </div>
+            </div>
+        `).join("");
+    } else {
+        dropsContentHTML = `<p class="empty-drop-text">Không có dữ liệu vật phẩm rơi khi tiêu diệt cho Pal này.</p>`;
+    }
+
+    const dropsHTML = `
+        ${hasRanch ? `
+            <div class="modal-section-title"><i class="fa-solid fa-cow text-emerald-400"></i> Vật phẩm thu được khi Chăn thả tại Ranch (Farming / Grazing Drops)</div>
+            <div class="modal-drops-list">
+                ${ranchContentHTML}
+            </div>
+        ` : ''}
+
+        <div class="modal-section-title"><i class="fa-solid fa-skull-crossbones text-rose-400"></i> Vật phẩm rơi khi Tiêu diệt / Mổ thịt (Disassembly / Combat Drops)</div>
+        <div class="modal-drops-list">
+            ${dropsContentHTML}
+        </div>
+    `;
+
+    // Xử lý dữ liệu Partner Skill
+    const pSkill = pal.partner_skill || {};
+    const pSkillName = pSkill.name || "Partner Skill";
+    const pSkillDesc = pSkill.description || "";
+    const pSkillLevels = pSkill.levels || [];
+
+    let pSkillLevelsHTML = "";
+    if (pSkillLevels.length > 0) {
+        const sortedLevels = [...pSkillLevels].sort((a, b) => {
+            const numA = parseInt((a.level + "").replace(/\D/g, "")) || 1;
+            const numB = parseInt((b.level + "").replace(/\D/g, "")) || 1;
+            return numA - numB;
+        });
+        const badgesHTML = sortedLevels.map(l => `
+            <span class="partner-level-badge">
+                <strong style="color:#facc15; min-width: 44px; display: inline-block;">Lv.${l.level}:</strong> <span>${l.value}</span>
+            </span>
+        `).join("");
+        pSkillLevelsHTML = `
+            <div class="partner-levels-box">
+                ${badgesHTML}
+            </div>
+        `;
+    }
+
+    const partnerSkillHTML = `
+        <div class="modal-section-title"><i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> Kỹ năng đặc trưng / Đồng hành (${pSkillName})</div>
+        <div class="partner-skill-card">
+            <div class="partner-skill-desc">
+                <i class="fa-solid fa-circle-info text-purple-300"></i>
+                <span>${pSkillDesc || 'Không có mô tả cho kỹ năng này.'}</span>
+            </div>
+            ${pSkillLevelsHTML}
+        </div>
+    `;
+
     modalBody.innerHTML = `
         <div class="modal-header">
             <div class="modal-icon">
@@ -522,36 +626,13 @@ function openPalModal(palName) {
             </div>
         ` : ''}
 
+        ${partnerSkillHTML}
+
         <div class="modal-section-title"><i class="fa-solid fa-hammer text-green-400"></i> Kỹ năng làm việc tại Trại (Work Suitability)</div>
         <div class="modal-work-list">
             ${worksHTML || '<p style="color:var(--text-secondary); font-size:0.9rem;">Pal này không có kỹ năng làm việc tại căn cứ.</p>'}
         </div>
-
-        <div class="modal-map-action-box" style="margin-top:1.5rem; text-align:center;">
-            <button id="toggle-modal-map-btn" class="modal-view-map-btn" onclick="toggleModalInlineMap('${pal.name.replace(/'/g, "\\'")}')">
-                <i class="fa-solid fa-earth-americas"></i> Xem vị trí xuất hiện của <strong>${pal.name}</strong> trên Bản Đồ <i id="modal-map-chevron" class="fa-solid fa-chevron-down"></i>
-            </button>
-            
-            <!-- Giao diện Bản đồ nhúng ngay tại chỗ bên trong Modal -->
-            <div id="modal-inline-map-container" class="modal-inline-map-box hidden mt-3">
-                <div class="modal-map-toolbar">
-                    <div class="modal-map-tabs">
-                        <button class="modal-map-tab-btn active" id="modal-tab-palpagos" onclick="switchModalMapType('palpagos')">
-                            <i class="fa-solid fa-earth-oceania"></i> Palpagos Islands
-                        </button>
-                        <button class="modal-map-tab-btn" id="modal-tab-world_tree" onclick="switchModalMapType('world_tree')">
-                            <i class="fa-solid fa-tree"></i> The World Tree
-                        </button>
-                    </div>
-                    <div class="modal-spawn-filters">
-                        <span><i class="fa-solid fa-sun text-warning"></i> Ngày: <strong id="modal-day-count">0</strong></span>
-                        <span><i class="fa-solid fa-moon text-info"></i> Đêm: <strong id="modal-night-count">0</strong></span>
-                        <span><i class="fa-solid fa-skull text-danger"></i> Boss: <strong id="modal-boss-count">0</strong></span>
-                    </div>
-                </div>
-                <div id="modal-leaflet-map" class="modal-leaflet-map"></div>
-            </div>
-        </div>
+        ${dropsHTML}
     `;
 
     modal.classList.remove("hidden");
@@ -559,425 +640,6 @@ function openPalModal(palName) {
 
 function closePalModal() {
     document.getElementById("pal-modal").classList.add("hidden");
-    const container = document.getElementById("modal-inline-map-container");
-    if (container) container.classList.add("hidden");
-}
-
-function openPalModalAndMap(palName) {
-    openPalModal(palName);
-    setTimeout(() => {
-        toggleModalInlineMap(palName, true);
-    }, 60);
-}
-
-// Biến quản lý bản đồ nhúng trong Modal
-let modalLeafletMap = null;
-let modalMarkersLayerGroup = null;
-let modalActiveTileLayer = null;
-let modalCurrentMapType = "palpagos";
-let selectedModalPal = null;
-
-function toggleModalInlineMap(palName, forceOpen = false) {
-    const container = document.getElementById("modal-inline-map-container");
-    const chevron = document.getElementById("modal-map-chevron");
-    const btn = document.getElementById("toggle-modal-map-btn");
-    if (!container) return;
-
-    if (!forceOpen && !container.classList.contains("hidden")) {
-        // Đang bật -> Tắt đi
-        container.classList.add("hidden");
-        if (chevron) chevron.className = "fa-solid fa-chevron-down";
-        if (btn) btn.style.background = "";
-        return;
-    }
-
-    // Đang tắt (hoặc forceOpen) -> Bật lên ngay tại chỗ trong modal
-    container.classList.remove("hidden");
-    if (chevron) chevron.className = "fa-solid fa-chevron-up";
-    if (btn) btn.style.background = "linear-gradient(135deg, #0369a1 0%, #1d4ed8 100%)";
-
-    const pal = allPals.find(p => p.name === palName);
-    if (!pal) return;
-    selectedModalPal = pal;
-
-    // Kiểm tra tự động chọn bản đồ (nếu Palpagos không có mà The World Tree có -> chọn world_tree)
-    if (mapSpawnData && mapSpawnData.maps) {
-        const palpagosCfg = mapSpawnData.maps["palpagos"];
-        const worldTreeCfg = mapSpawnData.maps["world_tree"];
-        let countPalpagos = 0;
-        let countWorldTree = 0;
-
-        const dayLocs = (pal.spawns && pal.spawns.day) || [];
-        const nightLocs = (pal.spawns && pal.spawns.night) || [];
-        dayLocs.forEach(loc => {
-            if (mapWithin(loc, palpagosCfg)) countPalpagos++;
-            if (mapWithin(loc, worldTreeCfg)) countWorldTree++;
-        });
-        nightLocs.forEach(loc => {
-            if (mapWithin(loc, palpagosCfg)) countPalpagos++;
-            if (mapWithin(loc, worldTreeCfg)) countWorldTree++;
-        });
-
-        const palNameLower = pal.name.toLowerCase().replace(/\s+/g,"");
-        bossesList.forEach(b => {
-            const bIdLower = (b.id || "").toLowerCase().replace(/_/g,"");
-            const bItemLower = (b.item || "").toLowerCase().replace(/\s+/g,"");
-            if (bItemLower === palNameLower || bIdLower === palNameLower || bIdLower === "boss" + palNameLower) {
-                if (mapWithin(b, palpagosCfg)) countPalpagos++;
-                if (mapWithin(b, worldTreeCfg)) countWorldTree++;
-            }
-        });
-
-        if (countPalpagos === 0 && countWorldTree > 0) {
-            modalCurrentMapType = "world_tree";
-        } else {
-            modalCurrentMapType = "palpagos";
-        }
-    }
-
-    const tabPalpagos = document.getElementById("modal-tab-palpagos");
-    const tabWorldTree = document.getElementById("modal-tab-world_tree");
-    if (tabPalpagos) tabPalpagos.classList.toggle("active", modalCurrentMapType === "palpagos");
-    if (tabWorldTree) tabWorldTree.classList.toggle("active", modalCurrentMapType === "world_tree");
-
-    setupOrUpdateModalMap();
-
-    setTimeout(() => {
-        container.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }, 150);
-}
-
-function setupOrUpdateModalMap() {
-    if (!modalLeafletMap) {
-        modalLeafletMap = L.map("modal-leaflet-map", {
-            crs: L.CRS.Simple,
-            minZoom: 0,
-            maxZoom: 6,
-            zoomControl: true,
-            attributionControl: false
-        });
-
-        modalMarkersLayerGroup = L.layerGroup().addTo(modalLeafletMap);
-
-        modalLeafletMap.on("zoomend", function() {
-            const z = modalLeafletMap.getZoom();
-            const box = document.getElementById("modal-leaflet-map");
-            if (box) {
-                if (z <= 2) box.classList.add("zoomed-out");
-                else box.classList.remove("zoomed-out");
-            }
-        });
-    }
-
-    // Rất quan trọng: khi div container chuyển từ hidden sang visible, phải gọi invalidateSize để Leaflet tính kích thước chính xác
-    modalLeafletMap.invalidateSize();
-    switchModalTilesAndRender();
-}
-
-function switchModalMapType(mapType) {
-    modalCurrentMapType = mapType;
-    const tabPalpagos = document.getElementById("modal-tab-palpagos");
-    const tabWorldTree = document.getElementById("modal-tab-world_tree");
-    if (tabPalpagos) tabPalpagos.classList.toggle("active", modalCurrentMapType === "palpagos");
-    if (tabWorldTree) tabWorldTree.classList.toggle("active", modalCurrentMapType === "world_tree");
-    switchModalTilesAndRender();
-}
-
-function switchModalTilesAndRender() {
-    if (!modalLeafletMap) return;
-    if (modalActiveTileLayer) modalLeafletMap.removeLayer(modalActiveTileLayer);
-
-    const mapConfig = mapSpawnData?.maps?.[modalCurrentMapType] || {
-        imageMapDir: modalCurrentMapType === "palpagos" ? "image/map8/" : "image/treemap8/",
-        config: {
-            minMapTextureBlockSize: { X: 8192, Y: 8192 },
-            landScapeRealPositionMin: modalCurrentMapType === "palpagos" ? { X: -1099400, Y: -724400 } : { X: 347351.5, Y: -818197 },
-            landScapeRealPositionMax: modalCurrentMapType === "palpagos" ? { X: 349400, Y: 724400 } : { X: 689148.5, Y: -476400 }
-        }
-    };
-
-    const blockSize = mapConfig.config?.minMapTextureBlockSize || { X: 8192, Y: 8192 };
-    const NATIVE_ZOOM = 4;
-    const bottomLeft = modalLeafletMap.unproject([0, blockSize.Y], NATIVE_ZOOM);
-    const topRight = modalLeafletMap.unproject([blockSize.X, 0], NATIVE_ZOOM);
-    const bounds = L.latLngBounds(bottomLeft, topRight);
-
-    const tileDir = mapConfig.imageMapDir || (modalCurrentMapType === "palpagos" ? "image/map8/" : "image/treemap8/");
-    const tileUrl = `https://cdn.paldb.cc/${tileDir}z{z}x{x}y{y}.webp`;
-
-    modalActiveTileLayer = L.tileLayer(tileUrl, {
-        minZoom: 0,
-        maxZoom: 6,
-        maxNativeZoom: NATIVE_ZOOM,
-        noWrap: true,
-        tileSize: 512,
-        errorTileUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="100%" height="100%" fill="%231455a4"/></svg>'
-    }).addTo(modalLeafletMap);
-
-    modalActiveTileLayer.on("tileerror", function(e) {
-        if (!e.tile) return;
-        const coords = e.coords || (e.tile && e.tile._coords);
-        if (!coords || coords.z <= 0) {
-            e.tile.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="100%" height="100%" fill="%231455a4"/></svg>';
-            e.tile.style.background = "#1455a4";
-            return;
-        }
-        function tryRecoverFromAncestor(targetTile, origZ, origX, origY, checkZ) {
-            if (checkZ < 0) {
-                targetTile.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="100%" height="100%" fill="%231455a4"/></svg>';
-                targetTile.style.background = "#1455a4";
-                return;
-            }
-            const dz = origZ - checkZ;
-            const M = Math.pow(2, dz);
-            const parentX = Math.floor(origX / M);
-            const parentY = Math.floor(origY / M);
-            const ox = origX - (parentX * M);
-            const oy = origY - (parentY * M);
-            const parentUrl = `https://cdn.paldb.cc/${tileDir}z${checkZ}x${parentX}y${parentY}.webp`;
-            const testImg = new Image();
-            testImg.onload = function() {
-                targetTile.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"></svg>';
-                targetTile.style.backgroundImage = `url("${parentUrl}")`;
-                targetTile.style.backgroundSize = `${M * 100}% ${M * 100}%`;
-                targetTile.style.backgroundPosition = `-${ox * 512}px -${oy * 512}px`;
-                targetTile.style.backgroundRepeat = "no-repeat";
-            };
-            testImg.onerror = function() {
-                tryRecoverFromAncestor(targetTile, origZ, origX, origY, checkZ - 1);
-            };
-            testImg.src = parentUrl;
-        }
-        tryRecoverFromAncestor(e.tile, coords.z, coords.x, coords.y, coords.z - 1);
-    });
-
-    modalLeafletMap.setMaxBounds(bounds.pad(0.6));
-    renderModalMarkers();
-}
-
-function renderModalMarkers() {
-    if (!modalLeafletMap || !modalMarkersLayerGroup || !selectedModalPal) return;
-    modalMarkersLayerGroup.clearLayers();
-
-    const mapConfig = mapSpawnData?.maps?.[modalCurrentMapType] || {
-        config: {
-            minMapTextureBlockSize: { X: 8192, Y: 8192 },
-            landScapeRealPositionMin: modalCurrentMapType === "palpagos" ? { X: -1099400, Y: -724400 } : { X: 347351.5, Y: -818197 },
-            landScapeRealPositionMax: modalCurrentMapType === "palpagos" ? { X: 349400, Y: 724400 } : { X: 689148.5, Y: -476400 }
-        }
-    };
-
-    let dayCount = 0;
-    let nightCount = 0;
-    let bossCount = 0;
-    const bounds = L.latLngBounds();
-
-    const dayLocs = (selectedModalPal.spawns && selectedModalPal.spawns.day) || [];
-    const nightLocs = (selectedModalPal.spawns && selectedModalPal.spawns.night) || [];
-
-    function getLatLngModal(rpos) {
-        const minX = mapConfig.config.landScapeRealPositionMin.X;
-        const minY = mapConfig.config.landScapeRealPositionMin.Y;
-        const maxX = mapConfig.config.landScapeRealPositionMax.X;
-        const maxY = mapConfig.config.landScapeRealPositionMax.Y;
-        const blockSize = mapConfig.config.minMapTextureBlockSize || { X: 8192, Y: 8192 };
-        const scaleX = (rpos.X - minX) / (maxX - minX);
-        const scaleY = (rpos.Y - minY) / (maxY - minY);
-        return modalLeafletMap.unproject([scaleY * blockSize.Y, (1 - scaleX) * blockSize.X], 4);
-    }
-
-    dayLocs.forEach(loc => {
-        if (mapWithin(loc, mapSpawnData?.maps?.[modalCurrentMapType])) {
-            dayCount++;
-            const latlng = getLatLngModal(loc);
-            L.circle(latlng, {
-                className: "pal-spawn-circle day-circle",
-                color: "#f59e0b",
-                fillColor: "#fbbf24",
-                fillOpacity: 0.55,
-                radius: 35
-            }).bindPopup(`<strong>☀️ Ban ngày</strong><br>Pal: ${selectedModalPal.name}<br>Tọa độ: X:${loc.X}, Y:${loc.Y}`).addTo(modalMarkersLayerGroup);
-            bounds.extend(latlng);
-        }
-    });
-
-    nightLocs.forEach(loc => {
-        if (mapWithin(loc, mapSpawnData?.maps?.[modalCurrentMapType])) {
-            nightCount++;
-            const latlng = getLatLngModal(loc);
-            L.circle(latlng, {
-                className: "pal-spawn-circle night-circle",
-                color: "#06b6d4",
-                fillColor: "#22d3ee",
-                fillOpacity: 0.55,
-                radius: 35
-            }).bindPopup(`<strong>🌙 Ban đêm</strong><br>Pal: ${selectedModalPal.name}<br>Tọa độ: X:${loc.X}, Y:${loc.Y}`).addTo(modalMarkersLayerGroup);
-            bounds.extend(latlng);
-        }
-    });
-
-    const palNameLower = selectedModalPal.name.toLowerCase().replace(/\s+/g,"");
-    bossesList.forEach(b => {
-        const bIdLower = (b.id || "").toLowerCase().replace(/_/g,"");
-        const bItemLower = (b.item || "").toLowerCase().replace(/\s+/g,"");
-        if (bItemLower === palNameLower || bIdLower === palNameLower || bIdLower === "boss" + palNameLower) {
-            if (mapWithin(b, mapSpawnData?.maps?.[modalCurrentMapType])) {
-                bossCount++;
-                let latlng;
-                if (b.Ipos) {
-                    const isPalpagos = (modalCurrentMapType === "palpagos");
-                    const perPixel = 459;
-                    const minX = mapConfig.config.landScapeRealPositionMin.X;
-                    const minY = mapConfig.config.landScapeRealPositionMin.Y;
-                    const maxX = mapConfig.config.landScapeRealPositionMax.X;
-                    const maxY = mapConfig.config.landScapeRealPositionMax.Y;
-                    const blockSize = mapConfig.config.minMapTextureBlockSize || { X: 8192, Y: 8192 };
-                    const transform_x_pixel = (maxX - minX) / perPixel;
-                    const transform_y_pixel = (maxY - minY) / perPixel;
-                    const ingame_x_start = isPalpagos ? (1000 + (-582888 - minX) / perPixel) : -648.7;
-                    const ingame_y_start = isPalpagos ? (1000 + (-301000 - minY) / perPixel) : 127.7;
-                    const scaleX = (b.Ipos.Y + ingame_x_start) / transform_x_pixel;
-                    const scaleY = (b.Ipos.X + ingame_y_start) / transform_y_pixel;
-                    latlng = modalLeafletMap.unproject([scaleY * blockSize.Y, (1 - scaleX) * blockSize.X], 4);
-                } else if (b.Rpos) {
-                    latlng = getLatLngModal(b.Rpos);
-                }
-                if (latlng) {
-                    L.circleMarker(latlng, {
-                        color: "#ef4444",
-                        fillColor: "#dc2626",
-                        fillOpacity: 0.9,
-                        radius: 12,
-                        weight: 3
-                    }).bindPopup(`<strong>💀 Alpha Boss / Dungeon</strong><br>Pal: ${selectedModalPal.name}<br>Cấp độ: Lv.${b.level || "???"}`).addTo(modalMarkersLayerGroup);
-                    bounds.extend(latlng);
-                }
-            }
-        }
-    });
-
-    const dayEl = document.getElementById("modal-day-count");
-    const nightEl = document.getElementById("modal-night-count");
-    const bossEl = document.getElementById("modal-boss-count");
-    if (dayEl) dayEl.textContent = dayCount;
-    if (nightEl) nightEl.textContent = nightCount;
-    if (bossEl) bossEl.textContent = bossCount;
-
-    const blockSize = mapConfig.config?.minMapTextureBlockSize || { X: 8192, Y: 8192 };
-    if (bounds.isValid()) {
-        modalLeafletMap.fitBounds(bounds.pad(0.4), { maxZoom: 4 });
-    } else {
-        const center = modalLeafletMap.unproject([blockSize.X / 2, blockSize.Y / 2], 4);
-        modalLeafletMap.setView(center, 1);
-    }
-
-    const z = modalLeafletMap.getZoom();
-    const box = document.getElementById("modal-leaflet-map");
-    if (box) {
-        if (z <= 2) box.classList.add("zoomed-out");
-        else box.classList.remove("zoomed-out");
-    }
-}
-
-function jumpToMapForPal(palName) {
-    const pal = allPals.find(p => p.name === palName);
-    if (!pal) return;
-
-    closePalModal();
-
-    // Chuyển sang tab Maps
-    document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active"));
-    const mapModeBtn = document.querySelector('.mode-btn[data-mode="maps"]');
-    if (mapModeBtn) mapModeBtn.classList.add("active");
-    const palsView = document.getElementById("pals-view");
-    const mapsView = document.getElementById("maps-view");
-    if (palsView) palsView.classList.add("hidden");
-    if (mapsView) mapsView.classList.remove("hidden");
-    currentMode = "maps";
-
-    // Khởi tạo bản đồ nếu chưa có
-    if (!leafletMap) {
-        setupLeafletMap();
-    }
-
-    selectedPalForMap = pal;
-    const selectBox = document.getElementById("map-pal-select");
-    if (selectBox) selectBox.value = pal.name;
-
-    const badge = document.getElementById("selected-pal-info");
-    const badgeIcon = document.getElementById("map-pal-icon");
-    const badgeName = document.getElementById("map-pal-name");
-    const clearBtn = document.getElementById("clear-map-pal");
-    const alertBanner = document.getElementById("cross-map-alert");
-
-    if (badge && badgeIcon && badgeName) {
-        badgeIcon.src = pal.image_url || "https://cdn.paldb.cc/image/Pal/Texture/PalIcon/Normal/T_SheepBall_icon_normal.webp";
-        badgeName.textContent = `#${pal.id || "★"} ${pal.name}`;
-        badge.classList.remove("hidden");
-    }
-    if (clearBtn) clearBtn.classList.remove("hidden");
-    if (alertBanner) alertBanner.classList.add("hidden");
-
-    // Kiểm tra xem Pal này xuất hiện ở bản đồ nào để tự động chuyển đúng bản đồ (Palpagos hay The World Tree)
-    if (mapSpawnData && mapSpawnData.maps) {
-        const palpagosCfg = mapSpawnData.maps["palpagos"];
-        const worldTreeCfg = mapSpawnData.maps["world_tree"];
-
-        let countPalpagos = 0;
-        let countWorldTree = 0;
-
-        const dayLocs = (pal.spawns && pal.spawns.day) || [];
-        const nightLocs = (pal.spawns && pal.spawns.night) || [];
-        
-        dayLocs.forEach(loc => {
-            if (mapWithin(loc, palpagosCfg)) countPalpagos++;
-            if (mapWithin(loc, worldTreeCfg)) countWorldTree++;
-        });
-        nightLocs.forEach(loc => {
-            if (mapWithin(loc, palpagosCfg)) countPalpagos++;
-            if (mapWithin(loc, worldTreeCfg)) countWorldTree++;
-        });
-
-        // Kiểm tra Boss
-        const palNameLower = pal.name.toLowerCase().replace(/\s+/g,"");
-        bossesList.forEach(b => {
-            const bIdLower = (b.id || "").toLowerCase().replace(/_/g,"");
-            const bItemLower = (b.item || "").toLowerCase().replace(/\s+/g,"");
-            if (bItemLower === palNameLower || bIdLower === palNameLower || bIdLower === "boss" + palNameLower) {
-                if (mapWithin(b, palpagosCfg)) countPalpagos++;
-                if (mapWithin(b, worldTreeCfg)) countWorldTree++;
-            }
-        });
-
-        // Nếu bản đồ hiện tại không có điểm xuất hiện, nhưng bản đồ kia có -> tự động chuyển sang bản đồ kia
-        if (currentMapType === "palpagos" && countPalpagos === 0 && countWorldTree > 0) {
-            currentMapType = "world_tree";
-            document.querySelectorAll(".map-btn").forEach(b => {
-                b.classList.toggle("active", b.dataset.map === "world_tree");
-            });
-            const titleEl = document.getElementById("current-map-title");
-            if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-map-location-dot"></i> Bản đồ: <strong>The World Tree (Sakurajima)</strong>`;
-            switchLeafletTiles();
-        } else if (currentMapType === "world_tree" && countWorldTree === 0 && countPalpagos > 0) {
-            currentMapType = "palpagos";
-            document.querySelectorAll(".map-btn").forEach(b => {
-                b.classList.toggle("active", b.dataset.map === "palpagos");
-            });
-            const titleEl = document.getElementById("current-map-title");
-            if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-map-location-dot"></i> Bản đồ: <strong>Palpagos Islands</strong> (Main Map)`;
-            switchLeafletTiles();
-        }
-    }
-
-    renderMapMarkers();
-
-    // Cuộn trang mượt mà tới phần bản đồ
-    setTimeout(() => {
-        const mapSection = document.getElementById("leaflet-map");
-        if (mapSection) {
-            mapSection.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-    }, 150);
 }
 
 // ============================================================================
@@ -992,33 +654,36 @@ let selectedMapPalId = "";
 let activeSpawnFilters = { day: true, night: true, boss: true };
 
 async function initMapsSystem() {
-    // 1. Gắn sự kiện chuyển đổi Mode (Pals vs Maps)
+    // 1. Gắn sự kiện chuyển đổi Mode (Pals vs Maps vs Passives)
     const tabPals = document.getElementById("tab-btn-pals");
     const tabMaps = document.getElementById("tab-btn-maps");
+    const tabPassives = document.getElementById("tab-btn-passives");
     const viewPals = document.getElementById("view-pals");
     const viewMaps = document.getElementById("view-maps");
+    const viewPassives = document.getElementById("view-passives");
 
-    tabPals.addEventListener("click", () => {
-        currentMode = "pals";
-        tabPals.classList.add("active");
-        tabMaps.classList.remove("active");
-        viewPals.classList.remove("hidden");
-        viewMaps.classList.add("hidden");
-    });
+    function switchTab(mode) {
+        currentMode = mode;
+        if (tabPals) tabPals.classList.toggle("active", mode === "pals");
+        if (tabMaps) tabMaps.classList.toggle("active", mode === "maps");
+        if (tabPassives) tabPassives.classList.toggle("active", mode === "passives");
 
-    tabMaps.addEventListener("click", async () => {
-        currentMode = "maps";
-        tabMaps.classList.add("active");
-        tabPals.classList.remove("active");
-        viewMaps.classList.remove("hidden");
-        viewPals.classList.add("hidden");
+        if (viewPals) viewPals.classList.toggle("hidden", mode !== "pals");
+        if (viewMaps) viewMaps.classList.toggle("hidden", mode !== "maps");
+        if (viewPassives) viewPassives.classList.toggle("hidden", mode !== "passives");
 
-        if (!leafletMap) {
-            await setupLeafletMap();
-        } else {
-            setTimeout(() => leafletMap.invalidateSize(), 150);
+        if (mode === "maps") {
+            if (!leafletMap) {
+                setupLeafletMap();
+            } else {
+                setTimeout(() => leafletMap.invalidateSize(), 150);
+            }
         }
-    });
+    }
+
+    if (tabPals) tabPals.addEventListener("click", () => switchTab("pals"));
+    if (tabMaps) tabMaps.addEventListener("click", () => switchTab("maps"));
+    if (tabPassives) tabPassives.addEventListener("click", () => switchTab("passives"));
 
     // 2. Tải dữ liệu bản đồ map_spawn_data.json (Hỗ trợ mở trực tiếp file:// qua window.MAP_SPAWN_DATA hoặc fetch từ server)
     if (window.MAP_SPAWN_DATA) {
@@ -1546,3 +1211,158 @@ function renderMapMarkers() {
 
     updateMapZoomClasses();
 }
+
+// ============================================================================
+// HỆ THỐNG KỸ NĂNG BỊ ĐỘNG (PASSIVE SKILLS)
+// ============================================================================
+let allPassivesData = [];
+let passivesFilterState = {
+    search: "",
+    category: "pal", // "pal" (chỉ Pal 114 kỹ năng) hoặc "all" (tất cả 309 kỹ năng)
+    sortBy: "tier_desc" // "tier_desc", "tier_asc", "name_asc", "name_desc"
+};
+
+async function initPassivesSystem() {
+    // 1. Tải dữ liệu passives từ window.PASSIVES_DATA hoặc fetch từ data/passives.json
+    if (window.PASSIVES_DATA && Array.isArray(window.PASSIVES_DATA)) {
+        allPassivesData = window.PASSIVES_DATA;
+    } else {
+        try {
+            const resp = await fetch("data/passives.json");
+            allPassivesData = await resp.json();
+        } catch (e) {
+            console.warn("Chưa tải được passives.json:", e);
+            allPassivesData = [];
+        }
+    }
+
+    // Cập nhật tổng số trên header passives
+    const totalCountEl = document.getElementById("passives-total-count");
+    if (totalCountEl) totalCountEl.textContent = allPassivesData.length;
+
+    // 2. Gắn sự kiện tìm kiếm & sắp xếp
+    const searchInput = document.getElementById("passives-search");
+    if (searchInput) {
+        searchInput.addEventListener("input", (e) => {
+            passivesFilterState.search = e.target.value.trim().toLowerCase();
+            applyPassivesFiltersAndRender();
+        });
+    }
+
+    const sortSelect = document.getElementById("passives-sort");
+    if (sortSelect) {
+        sortSelect.addEventListener("change", (e) => {
+            passivesFilterState.sortBy = e.target.value;
+            applyPassivesFiltersAndRender();
+        });
+    }
+
+    // 3. Gắn sự kiện chọn nhóm kỹ năng (Chỉ Pal vs Tất cả)
+    const catChips = document.querySelectorAll(".passive-category-chip");
+    catChips.forEach(chip => {
+        chip.addEventListener("click", () => {
+            catChips.forEach(c => c.classList.remove("active"));
+            chip.classList.add("active");
+            passivesFilterState.category = chip.dataset.cat;
+            applyPassivesFiltersAndRender();
+        });
+    });
+
+    // 4. Render lần đầu
+    applyPassivesFiltersAndRender();
+}
+
+function applyPassivesFiltersAndRender() {
+    if (!allPassivesData || allPassivesData.length === 0) return;
+
+    let filtered = allPassivesData.filter(item => {
+        // Lọc theo nhóm (category)
+        if (passivesFilterState.category === "pal" && !item.is_pal) {
+            return false;
+        }
+
+        // Lọc theo từ khóa tìm kiếm (tên EN, tên VI, hoặc mô tả chỉ số)
+        if (passivesFilterState.search) {
+            const query = passivesFilterState.search;
+            const matchName = item.name.toLowerCase().includes(query) || (item.name_en && item.name_en.toLowerCase().includes(query)) || (item.name_vi && item.name_vi.toLowerCase().includes(query));
+            const matchDesc = item.desc && item.desc.toLowerCase().includes(query);
+            return matchName || matchDesc;
+        }
+
+        return true;
+    });
+
+    // Sắp xếp
+    filtered.sort((a, b) => {
+        switch (passivesFilterState.sortBy) {
+            case "tier_desc":
+                if (b.tier !== a.tier) return b.tier - a.tier;
+                return a.name_en.localeCompare(b.name_en);
+            case "tier_asc":
+                if (a.tier !== b.tier) return a.tier - b.tier;
+                return a.name_en.localeCompare(b.name_en);
+            case "name_asc":
+                return a.name_en.localeCompare(b.name_en);
+            case "name_desc":
+                return b.name_en.localeCompare(a.name_en);
+            default:
+                return 0;
+        }
+    });
+
+    // Cập nhật số lượng hiển thị
+    const visibleEl = document.getElementById("passives-visible-count");
+    if (visibleEl) visibleEl.textContent = filtered.length;
+
+    renderPassivesGrid(filtered);
+}
+
+function renderPassivesGrid(items) {
+    const grid = document.getElementById("passives-grid");
+    if (!grid) return;
+
+    if (items.length === 0) {
+        grid.innerHTML = `
+            <div class="no-results" style="grid-column: 1/-1;">
+                <i class="fa-solid fa-shield-slash empty-icon"></i>
+                <h3>Không tìm thấy Kỹ năng bị động nào phù hợp!</h3>
+                <p>Hãy thử từ khóa tìm kiếm khác hoặc đổi nhóm kỹ năng.</p>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = items.map(item => {
+        let rankClass = "rank-normal";
+        if (item.tier === 5) rankClass = "rank-5";
+        else if (item.tier === 4) rankClass = "rank-4";
+        else if (item.tier === 3) rankClass = "rank-3";
+        else if (item.tier < 0) rankClass = "rank-negative";
+
+        let tierClass = "tier-normal";
+        if (item.tier === 5) tierClass = "tier-5";
+        else if (item.tier === 4) tierClass = "tier-4";
+        else if (item.tier === 3) tierClass = "tier-3";
+        else if (item.tier < 0) tierClass = "tier-negative";
+
+        const catBadge = item.is_pal 
+            ? `<span class="passive-cat-tag pal"><i class="fa-solid fa-paw"></i> Pal</span>` 
+            : `<span class="passive-cat-tag"><i class="fa-solid fa-globe"></i> Mở rộng</span>`;
+
+        return `
+            <div class="passive-card ${tierClass}">
+                <div>
+                    <div class="passive-header">
+                        <span class="passive-rank-badge ${rankClass}">
+                            <i class="fa-solid ${item.tier < 0 ? 'fa-arrow-down-long' : 'fa-star'}"></i> ${item.rank_label}
+                        </span>
+                        ${catBadge}
+                    </div>
+                    <div class="passive-name">${item.name}</div>
+                </div>
+                <div class="passive-desc">${item.desc || 'Không có mô tả chi tiết'}</div>
+            </div>
+        `;
+    }).join("");
+}
+
