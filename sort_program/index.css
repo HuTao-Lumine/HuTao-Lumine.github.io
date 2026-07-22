@@ -636,13 +636,27 @@ body {
 .modal-content {
     background: var(--bg-secondary);
     width: 100%;
-    max-width: 600px;
+    max-width: 1060px;
     max-height: 90vh;
     overflow-y: auto;
     position: relative;
     border-radius: 24px;
-    padding: 2rem;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    padding: 2.2rem 2.4rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.modal-body-layout {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .modal-body-layout {
+        grid-template-columns: 1fr !important;
+        gap: 1.5rem !important;
+    }
 }
 
 .modal-close {

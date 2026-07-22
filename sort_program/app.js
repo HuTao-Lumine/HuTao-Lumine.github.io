@@ -86,19 +86,17 @@ function getWorkInfo(wType) {
 // CƠ CHẾ AI SMART FINDER: ĐỌC HIỂU & PHÂN LOẠI KỸ NĂNG ĐỒNG HÀNH (PARTNER SKILLS)
 // ============================================================================
 function matchesPartnerCategory(pal, fullPsText, cat) {
-    const ps = pal.partner_skill || {};
-    const psName = (ps.name || "").toLowerCase();
-    const psDesc = (ps.description || "").toLowerCase();
-    const runSpeed = pal.mount_speed ? (pal.mount_speed.run_speed || 0) : 0;
-    const flySpeed = pal.mount_speed ? (pal.mount_speed.fly_speed || 0) : 0;
+    const isTrueMount = fullPsText.includes("can be ridden") || fullPsText.includes("flying mount") || fullPsText.includes("water mount") || fullPsText.includes("ridden") || fullPsText.includes("mounted") || fullPsText.includes("saddle") || fullPsText.includes("cưỡi");
+    const isFlyMount = isTrueMount && (fullPsText.includes("flying mount") || fullPsText.includes("fly") || fullPsText.includes("aerial") || fullPsText.includes("cưỡi bay"));
+    const isWaterMount = isTrueMount && (fullPsText.includes("water mount") || fullPsText.includes("travel on water") || fullPsText.includes("swim") || fullPsText.includes("bơi") || fullPsText.includes("lướt nước"));
 
     switch (cat) {
         case "mount_land":
-            return runSpeed > 0 || fullPsText.includes("can be ridden") || fullPsText.includes("sprint") || fullPsText.includes("mounted") || fullPsText.includes("cưỡi");
+            return isTrueMount && !isFlyMount && !isWaterMount;
         case "mount_fly":
-            return flySpeed > 0 || fullPsText.includes("flying mount") || fullPsText.includes("fly") || fullPsText.includes("aerial") || fullPsText.includes("cưỡi bay");
+            return isFlyMount;
         case "mount_water":
-            return fullPsText.includes("water mount") || fullPsText.includes("swim") || fullPsText.includes("bơi") || fullPsText.includes("lướt nước");
+            return isWaterMount;
         case "glider":
             return fullPsText.includes("glider") || fullPsText.includes("parachute") || fullPsText.includes("glide") || fullPsText.includes("dù lượn");
         case "weapon":
@@ -125,9 +123,10 @@ function checkPartnerSkillMatch(pal, searchQuery, categories) {
     const psName = (ps.name || "").toLowerCase();
     const psDesc = (ps.description || "").toLowerCase();
     const levelsText = (ps.levels || []).map(l => (l.value || "")).join(" ").toLowerCase();
-    const mountInfo = pal.mount_speed ? "mount ride ridden can be ridden sprint speed thú cưỡi" : "";
     const ranchInfo = (pal.ranch_drops && pal.ranch_drops.length > 0) ? "ranch farming drops harvest chăn thả rớt đồ" : "";
-    const fullPsText = [psName, psDesc, levelsText, mountInfo, ranchInfo, pal.name.toLowerCase()].join(" ");
+    const fullPsText = [psName, psDesc, levelsText, ranchInfo, pal.name.toLowerCase()].join(" ");
+
+    const isTrueMount = fullPsText.includes("can be ridden") || fullPsText.includes("flying mount") || fullPsText.includes("water mount") || fullPsText.includes("ridden") || fullPsText.includes("mounted") || fullPsText.includes("saddle") || fullPsText.includes("cưỡi");
 
     // 1. Kiểm tra theo từ khóa tìm kiếm (Keyword / Fuzzy matching)
     if (searchQuery) {
@@ -139,7 +138,7 @@ function checkPartnerSkillMatch(pal, searchQuery, categories) {
             if (q.includes("bay") || q.includes("lượn") || q.includes("fly")) {
                 matchQuery = fullPsText.includes("fly") || fullPsText.includes("flying") || fullPsText.includes("glider") || fullPsText.includes("glide") || fullPsText.includes("aerial");
             } else if (q.includes("cưỡi") || q.includes("ngựa") || q.includes("ride") || q.includes("mount")) {
-                matchQuery = fullPsText.includes("can be ridden") || fullPsText.includes("mount") || (pal.mount_speed && pal.mount_speed.run_speed > 0);
+                matchQuery = isTrueMount;
             } else if (q.includes("súng") || q.includes("bắn") || q.includes("đạn") || q.includes("tên lửa") || q.includes("pháo") || q.includes("gun") || q.includes("rocket") || q.includes("missile")) {
                 matchQuery = fullPsText.includes("shotgun") || fullPsText.includes("grenade") || fullPsText.includes("missile") || fullPsText.includes("rifle") || fullPsText.includes("flamethrower") || fullPsText.includes("gun") || fullPsText.includes("cannon") || fullPsText.includes("bomb") || fullPsText.includes("weapon");
             } else if (q.includes("hồi máu") || q.includes("máu") || q.includes("heal") || q.includes("hp")) {
@@ -241,8 +240,10 @@ function applyFiltersAndRender() {
 
         // --- Lọc theo Thú cưỡi (Mount Only) ---
         if (filterState.mountOnly) {
-            const runSpeed = pal.mount_speed ? (pal.mount_speed.run_speed || 0) : 0;
-            if (runSpeed <= 0) return false;
+            const ps = pal.partner_skill || {};
+            const psText = ((ps.name || "") + " " + (ps.description || "")).toLowerCase();
+            const isTrueMount = psText.includes("can be ridden") || psText.includes("flying mount") || psText.includes("water mount") || psText.includes("ridden") || psText.includes("mounted") || psText.includes("saddle") || psText.includes("cưỡi");
+            if (!isTrueMount) return false;
         }
 
         // --- Lọc theo Hệ (Elements) ---
@@ -801,92 +802,115 @@ function openPalModal(palName) {
     `;
 
     modalBody.innerHTML = `
-        <div class="modal-header">
-            <div class="modal-icon">
-                <img src="${imgUrl}" alt="${pal.name}" onerror="this.src='https://cdn.paldb.cc/image/Pal/Texture/PalIcon/Normal/T_SheepBall_icon_normal.webp'">
+        <div class="modal-body-layout">
+            <!-- Cột trái: Thông tin tổng quan (Avatar, Tên, Hệ, Nội tại Partner Skill) -->
+            <div class="modal-left-panel" style="background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.3rem;">
+                <div class="modal-hero-box" style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+                    <div class="modal-icon" style="width: 130px; height: 130px; border-radius: 26px; margin-bottom: 0.9rem; box-shadow: 0 12px 30px rgba(0,0,0,0.6); border: 2px solid var(--accent-color);">
+                        <img loading="lazy" src="${imgUrl}" alt="${pal.name}" onerror="this.src='https://cdn.paldb.cc/image/Pal/Texture/PalIcon/Normal/T_SheepBall_icon_normal.webp'" style="width: 100%; height: 100%; object-fit: contain;">
+                    </div>
+                    <span class="pal-id" style="font-size:0.95rem; font-weight:700; color:var(--accent-color);">${idDisplay}</span>
+                    <h2 style="font-family:'Outfit',sans-serif; font-size:1.95rem; font-weight:800; margin:4px 0 10px; line-height: 1.2;">${pal.name}</h2>
+                    <div class="pal-elements" style="display:flex; flex-wrap:wrap; justify-content:center; gap:6px;">${elemsHTML}</div>
+                </div>
+
+                <hr style="border:0; height:1px; background:rgba(255,255,255,0.08); margin:0;">
+
+                <div class="modal-left-ps">
+                    ${partnerSkillHTML}
+                </div>
             </div>
-            <div class="modal-title-box">
-                <span class="pal-id" style="font-size:0.9rem;">${idDisplay}</span>
-                <h2>${pal.name}</h2>
-                <div class="pal-elements" style="margin-top:0.5rem;">${elemsHTML}</div>
+
+            <!-- Cột phải: Chi tiết chỉ số chiến đấu, thể chất, kỹ năng trại & vật phẩm rớt -->
+            <div class="modal-right-panel" style="display: flex; flex-direction: column; gap: 1.4rem;">
+                <!-- Nhóm 1: Thông số chiến đấu & Thể chất -->
+                <div>
+                    <div class="modal-section-title" style="margin-top:0;"><i class="fa-solid fa-chart-line text-blue-400"></i> Thông số chiến đấu & Thể chất cơ bản (Base Combat & Biology Stats)</div>
+                    <div class="modal-grid-stats detailed-grid" style="grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin: 0.8rem 0;">
+                        <div class="modal-stat-card border-l-4 border-l-red-500">
+                            <span class="label">❤️ Sinh lực cơ bản (Base HP)</span>
+                            <span class="val" style="color:#f87171;">${stats.hp || "-"}</span>
+                            <span class="sub-desc">Tối đa Lv.80: ${stats.max_hp || 'N/A'}</span>
+                        </div>
+                        <div class="modal-stat-card border-l-4 border-l-orange-500">
+                            <span class="label">🏹 Tấn công tầm xa (Shot Attack)</span>
+                            <span class="val" style="color:#fb923c;">${stats.attack || "-"}</span>
+                            <span class="sub-desc">Tối đa Lv.80: ${stats.max_attack || 'N/A'}</span>
+                        </div>
+                        <div class="modal-stat-card border-l-4 border-l-amber-500">
+                            <span class="label">⚔️ Tấn công cận chiến (Melee)</span>
+                            <span class="val" style="color:#f59e0b;">${stats.melee_attack || "-"}</span>
+                            <span class="sub-desc">Sát thương kỹ năng tầm gần</span>
+                        </div>
+                        <div class="modal-stat-card border-l-4 border-l-sky-500">
+                            <span class="label">🛡️ Phòng thủ cơ bản (Defense)</span>
+                            <span class="val" style="color:#38bdf8;">${stats.defense || "-"}</span>
+                            <span class="sub-desc">Tối đa Lv.80: ${stats.max_defense || 'N/A'}</span>
+                        </div>
+                        <div class="modal-stat-card border-l-4 border-l-indigo-500">
+                            <span class="label">🛠️ Hỗ trợ & Tốc độ làm việc</span>
+                            <span class="val" style="color:#818cf8;">${stats.support || 100}</span>
+                            <span class="sub-desc">Nền tảng tốc độ xây/chế tạo</span>
+                        </div>
+                        <div class="modal-stat-card border-l-4 border-l-purple-500">
+                            <span class="label">⚡ Dung lượng thể lực (Stamina)</span>
+                            <span class="val" style="color:#c084fc;">${stats.stamina || 100}</span>
+                            <span class="sub-desc">Tiêu hao khi lướt/bay/tấn công</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Nhóm 2: Tốc độ di chuyển & Sinh học -->
+                <div>
+                    <div class="modal-section-title"><i class="fa-solid fa-gauge-high text-yellow-400"></i> Tốc độ di chuyển & Giá trị sinh học (Speeds & Biology)</div>
+                    <div class="modal-grid-stats detailed-grid" style="grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin: 0.8rem 0;">
+                        <div class="modal-stat-card border-l-4 border-l-yellow-400">
+                            <span class="label">🚀 Tốc độ lướt / Nhanh (Sprint)</span>
+                            <span class="val" style="color:#facc15;">${stats.sprint_speed || (mount.sprint_speed > 0 ? mount.sprint_speed : "-")}</span>
+                            <span class="sub-desc">Tốc độ tối đa khi cưỡi nước rút</span>
+                        </div>
+                        <div class="modal-stat-card border-l-4 border-l-amber-400">
+                            <span class="label">🐎 Tốc độ chạy thường (Run)</span>
+                            <span class="val" style="color:#fbbf24;">${stats.run_speed || (mount.run_speed > 0 ? mount.run_speed : "-")}</span>
+                            <span class="sub-desc">Tốc độ di chuyển tiêu chuẩn</span>
+                        </div>
+                        <div class="modal-stat-card border-l-4 border-l-stone-400">
+                            <span class="label">🐢 Tốc độ đi bộ (Slow Walk)</span>
+                            <span class="val" style="color:#a8a29e;">${stats.slow_walk_speed || 50}</span>
+                            <span class="sub-desc">Tốc độ khi mang vác quá tải</span>
+                        </div>
+                        <div class="modal-stat-card border-l-4 border-l-emerald-400">
+                            <span class="label">💰 Giá bán tiêu chuẩn (Price)</span>
+                            <span class="val" style="color:#34d399; font-size:1.15rem;">${(stats.price || 100).toLocaleString('vi-VN')} Vàng</span>
+                            <span class="sub-desc">Phẩm chất (Rarity): Rank ${stats.rarity || 1}</span>
+                        </div>
+                        <div class="modal-stat-card border-l-4 border-l-pink-400">
+                            <span class="label">🍖 Chỉ số đói & Thức ăn (Food)</span>
+                            <span class="val" style="color:#f472b6;">${stats.food || 100} điểm</span>
+                            <span class="sub-desc">Tiêu thụ: ${stats.food_amount || 1} 🍞 | Size: ${stats.size || 'M'}</span>
+                        </div>
+                        <div class="modal-stat-card border-l-4 border-l-cyan-400">
+                            <span class="label">⚖️ Tỉ lệ giới tính (Gender Ratio)</span>
+                            <span class="val" style="color:#22d3ee; font-size:1.1rem;">♂️ ${stats.male_prob || 50}% / ♀️ ${100 - (stats.male_prob || 50)}%</span>
+                            <span class="sub-desc">Tỉ lệ sinh ra đực/cái khi lai tạo</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Nhóm 3: Kỹ năng làm việc -->
+                <div>
+                    <div class="modal-section-title"><i class="fa-solid fa-hammer text-green-400"></i> Kỹ năng làm việc tại Trại (Work Suitability)</div>
+                    <div class="modal-work-list" style="margin-top: 0.6rem;">
+                        ${worksHTML || '<p style="color:var(--text-secondary); font-size:0.9rem;">Pal này không có kỹ năng làm việc tại căn cứ.</p>'}
+                    </div>
+                </div>
+
+                <!-- Nhóm 4: Vật phẩm rơi -->
+                <div>
+                    ${dropsHTML}
+                </div>
             </div>
         </div>
-
-        <div class="modal-section-title"><i class="fa-solid fa-chart-line text-blue-400"></i> Thông số chiến đấu & Thể chất cơ bản (Base Combat & Biology Stats)</div>
-        <div class="modal-grid-stats detailed-grid">
-            <div class="modal-stat-card border-l-4 border-l-red-500">
-                <span class="label">❤️ Sinh lực cơ bản (Base HP)</span>
-                <span class="val" style="color:#f87171;">${stats.hp || "-"}</span>
-                <span class="sub-desc">Tối đa Lv.80: ${stats.max_hp || 'N/A'}</span>
-            </div>
-            <div class="modal-stat-card border-l-4 border-l-orange-500">
-                <span class="label">🏹 Tấn công tầm xa (Shot Attack)</span>
-                <span class="val" style="color:#fb923c;">${stats.attack || "-"}</span>
-                <span class="sub-desc">Tối đa Lv.80: ${stats.max_attack || 'N/A'}</span>
-            </div>
-            <div class="modal-stat-card border-l-4 border-l-amber-500">
-                <span class="label">⚔️ Tấn công cận chiến (Melee Attack)</span>
-                <span class="val" style="color:#f59e0b;">${stats.melee_attack || "-"}</span>
-                <span class="sub-desc">Sát thương kỹ năng tầm gần</span>
-            </div>
-            <div class="modal-stat-card border-l-4 border-l-sky-500">
-                <span class="label">🛡️ Phòng thủ cơ bản (Defense)</span>
-                <span class="val" style="color:#38bdf8;">${stats.defense || "-"}</span>
-                <span class="sub-desc">Tối đa Lv.80: ${stats.max_defense || 'N/A'}</span>
-            </div>
-            <div class="modal-stat-card border-l-4 border-l-indigo-500">
-                <span class="label">🛠️ Hỗ trợ & Tốc độ làm việc (Support)</span>
-                <span class="val" style="color:#818cf8;">${stats.support || 100}</span>
-                <span class="sub-desc">Nền tảng tốc độ xây/chế tạo</span>
-            </div>
-            <div class="modal-stat-card border-l-4 border-l-purple-500">
-                <span class="label">⚡ Dung lượng thể lực (Stamina)</span>
-                <span class="val" style="color:#c084fc;">${stats.stamina || 100}</span>
-                <span class="sub-desc">Tiêu hao khi lướt/bay/tấn công</span>
-            </div>
-        </div>
-
-        <div class="modal-section-title"><i class="fa-solid fa-gauge-high text-yellow-400"></i> Tốc độ di chuyển & Giá trị sinh học (Movement Speeds & Biology)</div>
-        <div class="modal-grid-stats detailed-grid">
-            <div class="modal-stat-card border-l-4 border-l-yellow-400">
-                <span class="label">🚀 Tốc độ lướt / Nhanh (Sprint Speed)</span>
-                <span class="val" style="color:#facc15;">${stats.sprint_speed || (mount.sprint_speed > 0 ? mount.sprint_speed : "-")}</span>
-                <span class="sub-desc">Tốc độ tối đa khi cưỡi nước rút</span>
-            </div>
-            <div class="modal-stat-card border-l-4 border-l-amber-400">
-                <span class="label">🐎 Tốc độ chạy thường (Running Speed)</span>
-                <span class="val" style="color:#fbbf24;">${stats.run_speed || (mount.run_speed > 0 ? mount.run_speed : "-")}</span>
-                <span class="sub-desc">Tốc độ di chuyển tiêu chuẩn</span>
-            </div>
-            <div class="modal-stat-card border-l-4 border-l-stone-400">
-                <span class="label">🐢 Tốc độ đi bộ (Slow Walk Speed)</span>
-                <span class="val" style="color:#a8a29e;">${stats.slow_walk_speed || 50}</span>
-                <span class="sub-desc">Tốc độ khi mang vác quá tải</span>
-            </div>
-            <div class="modal-stat-card border-l-4 border-l-emerald-400">
-                <span class="label">💰 Giá bán tiêu chuẩn (Gold Coin Price)</span>
-                <span class="val" style="color:#34d399;">${(stats.price || 100).toLocaleString('vi-VN')} Vàng</span>
-                <span class="sub-desc">Phẩm chất (Rarity): Rank ${stats.rarity || 1}</span>
-            </div>
-            <div class="modal-stat-card border-l-4 border-l-pink-400">
-                <span class="label">🍖 Lượng thức ăn & Chỉ số đói (Food Bar)</span>
-                <span class="val" style="color:#f472b6;">${stats.food || 100} điểm</span>
-                <span class="sub-desc">Tiêu thụ: ${stats.food_amount || 1} 🍞 | Size: ${stats.size || 'M'}</span>
-            </div>
-            <div class="modal-stat-card border-l-4 border-l-cyan-400">
-                <span class="label">⚖️ Tỉ lệ giới tính (Gender Ratio)</span>
-                <span class="val" style="color:#22d3ee; font-size:1.1rem;">♂️ ${stats.male_prob || 50}% / ♀️ ${100 - (stats.male_prob || 50)}%</span>
-                <span class="sub-desc">Tỉ lệ sinh ra đực/cái khi lai tạo</span>
-            </div>
-        </div>
-
-        ${partnerSkillHTML}
-
-        <div class="modal-section-title"><i class="fa-solid fa-hammer text-green-400"></i> Kỹ năng làm việc tại Trại (Work Suitability)</div>
-        <div class="modal-work-list">
-            ${worksHTML || '<p style="color:var(--text-secondary); font-size:0.9rem;">Pal này không có kỹ năng làm việc tại căn cứ.</p>'}
-        </div>
-        ${dropsHTML}
     `;
 
     modal.classList.remove("hidden");
@@ -1723,23 +1747,38 @@ function extractPassiveModifiers(item) {
     
     let atk = 0, def = 0, hp = 0, work = 0, speed = 0;
     
-    const atkMatches = [...text.matchAll(/(?:tấn công|attack)\s*([+-]?\s*\d+(?:\.\d+)?)%/g)];
-    atkMatches.forEach(m => atk += parseFloat(m[1].replace(/\s+/g, '')));
+    // ATK
+    const atkMatches = [...text.matchAll(/(?:tấn công|attack)\s*(?:của\s*(?:người chơi|pal)\s*tăng\s*)?([+-]?\s*\d+(?:\.\d+)?)%/g)];
+    atkMatches.forEach(m => {
+        if (!m[0].includes('sát thương') && !m[0].includes('hệ')) {
+            atk += parseFloat(m[1].replace(/\s+/g, ''));
+        }
+    });
     
-    const defMatches = [...text.matchAll(/(?:phòng thủ|defense)\s*([+-]?\s*\d+(?:\.\d+)?)%/g)];
+    // DEF
+    const defMatches = [...text.matchAll(/(?:phòng thủ|defense)\s*(?:của\s*(?:người chơi|pal)\s*tăng\s*)?([+-]?\s*\d+(?:\.\d+)?)%/g)];
     defMatches.forEach(m => def += parseFloat(m[1].replace(/\s+/g, '')));
     
-    const hpMatches = [...text.matchAll(/(?:máu tối đa|max health|hp|sinh lực)\s*([+-]?\s*\d+(?:\.\d+)?)%/g)];
+    // HP
+    const hpMatches = [...text.matchAll(/(?:máu tối đa|max health|sinh lực|máu|hp)\s*([+-]?\s*\d+(?:\.\d+)?)%/g)];
     hpMatches.forEach(m => hp += parseFloat(m[1].replace(/\s+/g, '')));
     
-    const workMatches = [...text.matchAll(/(?:tốc độ làm việc|work speed)\s*([+-]?\s*\d+(?:\.\d+)?)%/g)];
+    // WORK
+    const workMatches = [...text.matchAll(/(?:tốc độ làm việc|work speed)\s*(?:của\s*(?:người chơi|pal)\s*tăng\s*)?([+-]?\s*\d+(?:\.\d+)?)%/g)];
     workMatches.forEach(m => work += parseFloat(m[1].replace(/\s+/g, '')));
+    if (work === 0) {
+        const workMatches2 = [...text.matchAll(/(tăng|giảm).*?tốc độ làm việc.*?([+-]?\s*\d+(?:\.\d+)?)%/g)];
+        workMatches2.forEach(m => {
+            const val = parseFloat(m[2]);
+            work += (m[1] === 'tăng' ? val : -val);
+        });
+    }
     
-    const speedMatches = [...text.matchAll(/(?:tốc độ di chuyển|movement speed)\s*([+-]?\s*\d+(?:\.\d+)?)%/g)];
+    // SPEED
+    const speedMatches = [...text.matchAll(/(?:tốc độ di chuyển|movement speed|movespeed|speed)\s*(?:trên mặt nước\s*|tăng\s*|giảm\s*)?([+-]?\s*\d+(?:\.\d+)?)%/g)];
     speedMatches.forEach(m => speed += parseFloat(m[1].replace(/\s+/g, '')));
-    
     if (speed === 0) {
-        const speedMatches2 = [...text.matchAll(/(tăng|giảm)\s*tốc độ di chuyển\s*(\d+(?:\.\d+)?)%/g)];
+        const speedMatches2 = [...text.matchAll(/(tăng|giảm).*?tốc độ di chuyển.*?(\d+(?:\.\d+)?)%/g)];
         speedMatches2.forEach(m => {
             const val = parseFloat(m[2]);
             speed += (m[1] === 'tăng' ? val : -val);
@@ -2067,7 +2106,6 @@ function updateBuildUI() {
     const maxDef = Math.floor((50 + baseDef * 0.075 * lv * 1.30) * (1 + rankBonus) * (1 + soulDefBonus) * (1 + passiveDefRatio));
 
     const baseWork = stats.support || 100;
-    const workSpeedFinalNum = Math.round(baseWork * (1 + totalPassiveWork / 100) * (1 + soulWorkBonus));
     const mount = pal.mount || {};
     const baseSprint = stats.sprint_speed || (mount.sprint_speed > 0 ? mount.sprint_speed : 600);
     const sprintSpeedFinal = Math.round(baseSprint * (1 + totalPassiveSpeed / 100));
@@ -2116,13 +2154,13 @@ function updateBuildUI() {
             <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; margin-bottom:18px; background:rgba(30,41,59,0.5); padding:14px; border-radius:12px; border:1px solid rgba(255,255,255,0.06);">
                 <div>
                     <span style="font-size:0.8rem; color:#94a3b8; display:block;">🛠️ Tốc độ làm việc tại căn cứ:</span>
-                    <strong style="font-size:1.15rem; color:#60a5fa;">${workSpeedFinalNum}</strong> 
+                    <strong style="font-size:1.15rem; color:#60a5fa;">${baseWork}</strong> 
                     <span style="font-size:0.78rem; color:#cbd5e1;">(Gốc ${baseWork} | Skill ${totalPassiveWork >= 0 ? '+' : ''}${totalPassiveWork}% | Soul ${soulWorkBonus >= 0 ? '+' : ''}${Math.round(soulWorkBonus*100)}%)</span>
                 </div>
                 <div>
                     <span style="font-size:0.8rem; color:#94a3b8; display:block;">🚀 Tốc độ lướt di chuyển nhanh:</span>
                     <strong style="font-size:1.15rem; color:#facc15;">${sprintSpeedFinal}</strong> 
-                    <span style="font-size:0.78rem; color:#cbd5e1;">(Gốc ${baseSprint} ${totalPassiveSpeed >= 0 ? '+' : ''}${totalPassiveSpeed}%)</span>
+                    <span style="font-size:0.78rem; color:#cbd5e1;">(Gốc ${baseSprint} | Skill ${totalPassiveSpeed >= 0 ? '+' : ''}${totalPassiveSpeed}%)</span>
                 </div>
             </div>
 
@@ -2130,7 +2168,7 @@ function updateBuildUI() {
                 <strong style="color:#facc15;"><i class="fa-solid fa-sliders"></i> Tóm tắt Hệ số nhân (Multipliers Breakdown):</strong><br>
                 • Cấp độ: <strong>Lv.${lv}</strong> | Ngưng tụ sao: <strong>+${Math.round(rankBonus*100)}%</strong> (Rank ⭐ ${rankBonus*20})<br>
                 • Tiềm năng IVs: <strong>+${buildState.iv}%</strong> | Linh Hồn Statue: <strong>HP +${Math.round(soulHpBonus*100)}% | ATK +${Math.round(soulAtkBonus*100)}% | DEF +${Math.round(soulDefBonus*100)}% | Work +${Math.round(soulWorkBonus*100)}%</strong><br>
-                • Tổng Buff từ ${buildState.equippedPassives.length} Skill bị động: <strong>ATK ${totalPassiveAtk >= 0 ? '+' : ''}${totalPassiveAtk}% | DEF ${totalPassiveDef >= 0 ? '+' : ''}${totalPassiveDef}% | HP ${totalPassiveHp >= 0 ? '+' : ''}${totalPassiveHp}%</strong>
+                • Tổng Buff từ ${buildState.equippedPassives.length} Skill bị động: <strong>ATK ${totalPassiveAtk >= 0 ? '+' : ''}${totalPassiveAtk}% | DEF ${totalPassiveDef >= 0 ? '+' : ''}${totalPassiveDef}% | HP ${totalPassiveHp >= 0 ? '+' : ''}${totalPassiveHp}% | Speed ${totalPassiveSpeed >= 0 ? '+' : ''}${totalPassiveSpeed}% | Work ${totalPassiveWork >= 0 ? '+' : ''}${totalPassiveWork}%</strong>
             </div>
         `;
     }
