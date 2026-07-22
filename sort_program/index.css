@@ -332,6 +332,20 @@ body {
     font-weight: 600;
 }
 
+.partner-chip.active {
+    background: rgba(245, 158, 11, 0.22);
+    border-color: #f59e0b;
+    color: #fbbf24;
+    font-weight: 600;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+}
+
+.partner-search-box input:focus {
+    outline: none;
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+}
+
 /* Action Buttons */
 .filter-actions {
     display: flex;
@@ -686,20 +700,129 @@ body {
 .modal-grid-stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin: 1.5rem 0;
+    gap: 0.8rem;
+    margin: 1rem 0;
+}
+
+@media (max-width: 640px) {
+    .modal-grid-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 .modal-stat-card {
-    background: rgba(15, 23, 42, 0.6);
+    background: rgba(15, 23, 42, 0.75);
     border: 1px solid var(--border-color);
-    padding: 1rem;
-    border-radius: 14px;
+    padding: 0.85rem;
+    border-radius: 12px;
+    text-align: left;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.modal-stat-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.modal-stat-card .label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block; }
+.modal-stat-card .val { font-size: 1.25rem; font-weight: 800; display: block; line-height: 1.3; }
+.modal-stat-card .sub-desc { font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 4px; }
+
+/* Level & Rank Stat Calculator Styles */
+.level-calculator-card {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    border-radius: 16px;
+    padding: 1.25rem;
+    margin: 1.2rem 0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.calc-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.2rem;
+}
+
+@media (max-width: 640px) {
+    .calc-controls {
+        grid-template-columns: 1fr;
+    }
+}
+
+.calc-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.calc-field label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.calc-slider {
+    width: 100%;
+    accent-color: #34d399;
+    cursor: pointer;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.calc-select {
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(52, 211, 153, 0.4);
+    color: var(--text-primary);
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+}
+
+.calc-results-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.8rem;
+    background: rgba(0, 0, 0, 0.35);
+    padding: 0.85rem;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 640px) {
+    .calc-results-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.calc-result-item {
     text-align: center;
 }
 
-.modal-stat-card .label { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px; display: block; }
-.modal-stat-card .val { font-size: 1.3rem; font-weight: 800; }
+.calc-result-item .r-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.calc-result-item .r-val {
+    font-size: 1.35rem;
+    font-weight: 800;
+}
+
+.calc-note {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.8rem;
+    line-height: 1.4;
+}
 
 .modal-section-title {
     font-size: 1rem;
@@ -1436,6 +1559,165 @@ body {
 .passive-card.tier-4 .passive-desc { border-left-color: #f59e0b; }
 .passive-card.tier-3 .passive-desc { border-left-color: #fbbf24; }
 .passive-card.tier-negative .passive-desc { border-left-color: #ef4444; }
+
+.passive-utility-chip {
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-secondary);
+    padding: 0.4rem 0.8rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.passive-utility-chip:hover {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(255, 255, 255, 0.28);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.passive-utility-chip.active {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(59, 130, 246, 0.35));
+    border-color: #38bdf8;
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+}
+
+/* =========================================
+   BUILD YOUR PALS SECTION STYLES
+   ========================================= */
+.equipped-slot-card {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s ease;
+}
+
+.equipped-slot-card:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(30, 41, 59, 0.9);
+}
+
+.equipped-slot-card.empty-slot {
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    background: rgba(15, 23, 42, 0.3);
+    color: #64748b;
+    justify-content: center;
+    font-style: italic;
+    padding: 16px;
+}
+
+.equipped-slot-info {
+    flex: 1;
+}
+
+.equipped-slot-name {
+    font-weight: 700;
+    color: #fff;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.equipped-slot-desc {
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    margin-top: 4px;
+}
+
+.remove-slot-btn {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #f87171;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.remove-slot-btn:hover {
+    background: #ef4444;
+    color: #fff;
+    transform: scale(1.08);
+}
+
+.build-stat-box {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.build-stat-box .s-label {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+
+.build-stat-box .s-val {
+    font-size: 1.6rem;
+    font-weight: 800;
+    font-family: 'Outfit', sans-serif;
+    display: block;
+    line-height: 1.1;
+}
+
+.build-stat-box .s-diff {
+    font-size: 0.76rem;
+    display: block;
+    margin-top: 5px;
+    font-weight: 600;
+}
+
+.saved-build-card {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s ease;
+}
+
+.saved-build-card:hover {
+    border-color: rgba(56, 189, 248, 0.4);
+    background: rgba(30, 41, 59, 0.85);
+}
+
+.saved-build-actions {
+    display: flex;
+    gap: 8px;
+}
+
+@media (max-width: 992px) {
+    .build-main-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
 
 @media (max-width: 768px) {
     .mode-navigation { flex-direction: column; }

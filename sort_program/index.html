@@ -40,7 +40,7 @@
             </div>
         </header>
 
-        <!-- Mode Navigation Tabs (Pals vs Maps vs Passives) -->
+        <!-- Mode Navigation Tabs (Pals vs Maps vs Passives vs Build) -->
         <div class="mode-navigation">
             <button id="tab-btn-pals" class="mode-tab-btn active" data-mode="pals">
                 <i class="fa-solid fa-paw"></i> <span>Pals (Lọc & Sắp xếp)</span>
@@ -50,6 +50,9 @@
             </button>
             <button id="tab-btn-passives" class="mode-tab-btn" data-mode="passives">
                 <i class="fa-solid fa-shield-halved"></i> <span>Passive Skills (Kỹ năng bị động)</span>
+            </button>
+            <button id="tab-btn-build" class="mode-tab-btn" data-mode="build">
+                <i class="fa-solid fa-screwdriver-wrench"></i> <span>Build Your Pals (Tính chỉ số & Lắp Skill)</span>
             </button>
         </div>
 
@@ -71,9 +74,14 @@
                         <option value="id-asc">#ID (Mặc định tăng dần)</option>
                         <option value="id-desc">#ID (Giảm dần)</option>
                         <option value="hp-desc">❤️ HP cơ bản (Cao nhất)</option>
-                        <option value="atk-desc">⚔️ Tấn công - ATK (Cao nhất)</option>
+                        <option value="atk-desc">🏹 Tấn công tầm xa - Shot ATK (Cao nhất)</option>
+                        <option value="melee-desc">⚔️ Tấn công cận chiến - Melee ATK (Cao nhất)</option>
                         <option value="def-desc">🛡️ Phòng thủ - DEF (Cao nhất)</option>
-                        <option value="speed-desc">⚡ Tốc độ cưỡi - Mount Speed (Nhanh nhất)</option>
+                        <option value="support-desc">🛠️ Tốc độ làm việc nền - Support (Cao nhất)</option>
+                        <option value="stamina-desc">⚡ Thể lực - Stamina (Cao nhất)</option>
+                        <option value="sprint-desc">🚀 Tốc độ lướt - Sprint Speed (Nhanh nhất)</option>
+                        <option value="speed-desc">🏃 Tốc độ chạy - Run Speed (Nhanh nhất)</option>
+                        <option value="price-desc">💰 Giá bán tiêu chuẩn - Price (Cao nhất)</option>
                     </select>
                 </div>
             </div>
@@ -148,6 +156,36 @@
                     <button class="chip work-chip" data-work="cooling"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_10.webp" class="filter-icon" alt="Cooling"> Làm lạnh</button>
                     <button class="chip work-chip" data-work="transporting"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_11.webp" class="filter-icon" alt="Transporting"> Vận chuyển</button>
                     <button class="chip work-chip" data-work="farming"><img src="https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_12.webp" class="filter-icon" alt="Farming"> Chăn thả</button>
+                </div>
+            </div>
+
+            <!-- Partner Skills Smart Filter (AI Reader & Categorizer) -->
+            <div class="filter-section mt-3 partner-skill-filter-box" style="border: 1px solid rgba(245, 158, 11, 0.25); background: rgba(245, 158, 11, 0.03);">
+                <div class="filter-group-header">
+                    <span class="group-title" style="color: #fbbf24;"><i class="fa-solid fa-wand-magic-sparkles" style="color: #f59e0b;"></i> Lọc theo Kỹ năng Đồng hành (Partner Skill - AI Smart Filter):</span>
+                    <span class="group-subtitle" style="font-size: 0.82rem; color: var(--text-secondary);"><i class="fa-solid fa-lightbulb"></i> Đọc hiểu mô tả, hỗ trợ tìm kiếm mờ khi bạn không nhớ rõ tên/nội tại</span>
+                </div>
+                
+                <div class="partner-skill-controls" style="margin-top: 10px;">
+                    <div class="partner-search-box" style="position: relative; margin-bottom: 12px;">
+                        <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);"></i>
+                        <input type="text" id="partner-skill-search" placeholder="Gõ từ khóa nội tại bạn nhớ mang máng (VD: bay lượn, súng shotgun, hồi máu, quặng, giảm cân, tăng sát thương lửa...)..." autocomplete="off" style="width: 100%; padding: 10px 38px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.05); color: var(--text-primary); font-size: 0.9rem; transition: all 0.3s;">
+                        <button id="clear-partner-search" class="clear-btn hidden" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-secondary); cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+
+                    <div class="partner-chips" id="partner-skill-filters" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <button class="chip partner-chip" data-partner="mount_land"><i class="fa-solid fa-horse"></i> Thú cưỡi chạy (Land Mount)</button>
+                        <button class="chip partner-chip" data-partner="mount_fly"><i class="fa-solid fa-dove"></i> Thú cưỡi bay (Flying Mount)</button>
+                        <button class="chip partner-chip" data-partner="mount_water"><i class="fa-solid fa-water"></i> Cưỡi bơi lướt (Water Mount)</button>
+                        <button class="chip partner-chip" data-partner="glider"><i class="fa-solid fa-parachute-box"></i> Dù lượn bay lượn (Glider)</button>
+                        <button class="chip partner-chip" data-partner="weapon"><i class="fa-solid fa-gun"></i> Súng đạn / Tên lửa / Vũ khí (Gun/Rocket)</button>
+                        <button class="chip partner-chip" data-partner="buff_atk"><i class="fa-solid fa-khanda"></i> Tăng sát thương / Tấn công (Attack Buff)</button>
+                        <button class="chip partner-chip" data-partner="buff_def"><i class="fa-solid fa-shield-heart"></i> Hồi máu / Phòng thủ (Heal/Defense)</button>
+                        <button class="chip partner-chip" data-partner="weight"><i class="fa-solid fa-weight-hanging"></i> Giảm trọng lượng quặng/đồ (Weight Reduction)</button>
+                        <button class="chip partner-chip" data-partner="drops"><i class="fa-solid fa-gift"></i> Tăng rớt đồ / Khai thác (Extra Drops/Ranch)</button>
+                        <button class="chip partner-chip" data-partner="infuse"><i class="fa-solid fa-palette"></i> Đổi hệ đòn đánh (Element Infusion)</button>
+                        <button class="chip partner-chip" data-partner="radar"><i class="fa-solid fa-radar"></i> Radar & Dò tìm (Detector/Radar)</button>
+                    </div>
                 </div>
             </div>
 
@@ -300,10 +338,221 @@
                         <span>Hiển thị: <strong id="passives-visible-count">114</strong> / <span id="passives-total-count">309</span> Kỹ năng</span>
                     </div>
                 </div>
+
+                <div class="utility-filters-row mt-3" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;">
+                    <div class="filter-group" style="width: 100%;">
+                        <span class="filter-label" style="display:block; margin-bottom: 6px;"><i class="fa-solid fa-bolt text-warning"></i> Lọc nhanh theo công dụng & hiệu ứng (khi không nhớ tên):</span>
+                        <div class="filter-chips utility-chips" style="display:flex; flex-wrap:wrap; gap:6px;">
+                            <button class="chip passive-utility-chip active" data-utility="all">
+                                <i class="fa-solid fa-check-double"></i> Tất cả
+                            </button>
+                            <button class="chip passive-utility-chip" data-utility="attack">
+                                <i class="fa-solid fa-crosshairs" style="color:#fb923c;"></i> ⚔️ Tấn công (Attack)
+                            </button>
+                            <button class="chip passive-utility-chip" data-utility="defense">
+                                <i class="fa-solid fa-shield-halved" style="color:#38bdf8;"></i> 🛡️ Phòng thủ (Defense)
+                            </button>
+                            <button class="chip passive-utility-chip" data-utility="work">
+                                <i class="fa-solid fa-hammer" style="color:#60a5fa;"></i> 🛠️ Tốc độ làm việc (Work Speed)
+                            </button>
+                            <button class="chip passive-utility-chip" data-utility="speed">
+                                <i class="fa-solid fa-gauge-high" style="color:#facc15;"></i> 🏃 Tốc độ di chuyển (Movement)
+                            </button>
+                            <button class="chip passive-utility-chip" data-utility="stamina">
+                                <i class="fa-solid fa-battery-full" style="color:#c084fc;"></i> ⚡ Thể lực (Stamina)
+                            </button>
+                            <button class="chip passive-utility-chip" data-utility="san">
+                                <i class="fa-solid fa-brain" style="color:#f472b6;"></i> 🧠 Minh mẫn (SAN)
+                            </button>
+                            <button class="chip passive-utility-chip" data-utility="hunger">
+                                <i class="fa-solid fa-utensils" style="color:#fbbf24;"></i> 🍖 Mức độ no (Hunger)
+                            </button>
+                            <button class="chip passive-utility-chip" data-utility="hp">
+                                <i class="fa-solid fa-heart" style="color:#f87171;"></i> ❤️ Máu tối đa (Max HP)
+                            </button>
+                            <button class="chip passive-utility-chip" data-utility="element">
+                                <i class="fa-solid fa-fire" style="color:#ef4444;"></i> 🌟 Sát thương hệ (Element Boost)
+                            </button>
+                            <button class="chip passive-utility-chip" data-utility="cooldown">
+                                <i class="fa-solid fa-clock-rotate-left" style="color:#2dd4bf;"></i> 🔄 Hồi chiêu (Cooldown)
+                            </button>
+                            <button class="chip passive-utility-chip" data-utility="harvest">
+                                <i class="fa-solid fa-tree" style="color:#4ade80;"></i> 🌲 Chặt cây & Đào đá
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <section class="passives-grid-section mt-4">
                 <div id="passives-grid" class="passives-grid"></div>
+            </section>
+        </div>
+
+        <!-- BUILD YOUR PALS TAB VIEW -->
+        <div id="view-build" class="tab-view hidden">
+            <section class="toolbar-section glass-panel mb-4">
+                <div class="build-header-banner" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px; margin-bottom:15px;">
+                    <div>
+                        <h2 style="font-size:1.45rem; font-weight:700; color:#fff; display:flex; align-items:center; gap:10px; margin:0;">
+                            <i class="fa-solid fa-screwdriver-wrench text-yellow-400"></i> Xây dựng Đội hình & Chỉ số Pal (Build Your Pals)
+                        </h2>
+                        <p style="color:var(--text-secondary); font-size:0.92rem; margin:5px 0 0 0;">
+                            Lựa chọn Pal, thử nghiệm lắp đặt tối đa 4 Kỹ năng bị động, tùy chỉnh Cấp độ, Cấp sao ngưng tụ, Linh Hồn và Chỉ số tiềm năng (IVs) với công thức chính xác 100%!
+                        </p>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button id="btn-reset-build" class="chip" style="background:rgba(239,68,68,0.2); border-color:#ef4444; color:#f87171; cursor:pointer;">
+                            <i class="fa-solid fa-rotate-right"></i> Đặt lại Build
+                        </button>
+                        <button id="btn-save-build" class="chip active" style="background:linear-gradient(135deg,#10b981,#059669); border-color:#34d399; color:#fff; cursor:pointer; font-weight:700;">
+                            <i class="fa-solid fa-floppy-disk"></i> Lưu Build này
+                        </button>
+                    </div>
+                </div>
+
+                <div class="build-main-grid" style="display:grid; grid-template-columns: minmax(360px, 1.1fr) minmax(380px, 1.4fr); gap:20px; align-items:start;">
+                    <!-- LEFT COLUMN: BUILD CONTROLS -->
+                    <div class="build-controls-panel glass-panel" style="background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.08); padding:20px; border-radius:16px;">
+                        <h3 style="font-size:1.05rem; color:#38bdf8; margin-top:0; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                            <span class="step-circle" style="background:#38bdf8; color:#0f172a; font-weight:800; width:24px; height:24px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:0.8rem;">1</span> Chọn Pal từ Danh sách
+                        </h3>
+                        <div class="pal-select-wrapper" style="position:relative; margin-bottom:20px;">
+                            <div class="search-box" style="margin-bottom:10px;">
+                                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                                <input type="text" id="build-pal-search" placeholder="🔍 Nhập tên Pal hoặc mã #ID (VD: Solenne, Anubis, 1, 102...)..." autocomplete="off" style="width:100%;">
+                            </div>
+                            <select id="build-pal-select" class="calc-select" style="width:100%; font-size:0.98rem; padding:10px; border-radius:10px; background:#1e293b; color:#fff; border:1px solid rgba(255,255,255,0.15);">
+                                <!-- Populate via JS -->
+                            </select>
+                        </div>
+
+                        <h3 style="font-size:1.05rem; color:#facc15; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                            <span class="step-circle" style="background:#facc15; color:#0f172a; font-weight:800; width:24px; height:24px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:0.8rem;">2</span> Cấp độ & Cấp sao Ngưng tụ
+                        </h3>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;">
+                            <div class="calc-field">
+                                <label for="build-level" style="font-size:0.84rem;"><i class="fa-solid fa-layer-group"></i> Cấp độ (Level 1 - 80): <strong id="build-level-val" style="color:#facc15;">80</strong></label>
+                                <input type="range" id="build-level" min="1" max="80" value="80" class="calc-slider">
+                            </div>
+                            <div class="calc-field">
+                                <label for="build-rank" style="font-size:0.84rem;"><i class="fa-solid fa-star"></i> Cấp sao (Rank ⭐):</label>
+                                <select id="build-rank" class="calc-select" style="width:100%;">
+                                    <option value="0">⭐ 0 (Rank 0 / +0%)</option>
+                                    <option value="0.05">⭐ 1 (Rank 1 / +5%)</option>
+                                    <option value="0.10">⭐⭐ 2 (Rank 2 / +10%)</option>
+                                    <option value="0.15">⭐⭐⭐ 3 (Rank 3 / +15%)</option>
+                                    <option value="0.20" selected>⭐⭐⭐⭐ 4 (Rank 4 / +20% Max)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <h3 style="font-size:1.05rem; color:#c084fc; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                            <span class="step-circle" style="background:#c084fc; color:#0f172a; font-weight:800; width:24px; height:24px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:0.8rem;">3</span> Tiềm năng cá nhân (IVs) & Nâng cấp Linh Hồn (Pal Souls)
+                        </h3>
+                        <div class="calc-field mb-3" style="margin-bottom:14px;">
+                            <label for="build-iv" style="font-size:0.84rem;"><i class="fa-solid fa-dna text-info"></i> Chỉ số IV (0% - 30%): <strong id="build-iv-val" style="color:#38bdf8;">15% (IV 50)</strong></label>
+                            <input type="range" id="build-iv" min="0" max="30" value="15" step="1" class="calc-slider">
+                        </div>
+
+                        <!-- Pal Souls Enhancement Box (Match in-game Enhance Pals UI) -->
+                        <div class="pal-souls-enhance-box glass-panel" style="background:rgba(30,41,59,0.65); border:1px solid rgba(192,132,252,0.3); border-radius:12px; padding:14px; margin-bottom:20px;">
+                            <div style="font-size:0.88rem; font-weight:700; color:#c084fc; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                                <span><i class="fa-solid fa-gem text-purple-400"></i> Nâng cấp Linh Hồn (Statue of Power)</span>
+                                <button id="btn-reset-souls" class="chip" style="padding:4px 10px; font-size:0.75rem; background:rgba(239,68,68,0.18); border-color:#ef4444; color:#f87171; cursor:pointer;" title="Đặt lại 0% toàn bộ Linh Hồn">
+                                    <i class="fa-solid fa-rotate-left"></i> Đặt lại Soul
+                                </button>
+                            </div>
+                            
+                            <div style="display:flex; flex-direction:column; gap:10px;">
+                                <!-- HP Soul -->
+                                <div class="soul-row" style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:rgba(15,23,42,0.6); padding:8px 12px; border-radius:8px;">
+                                    <span style="font-size:0.82rem; color:#f87171; font-weight:600; width:135px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-heart"></i> Max Health (HP)</span>
+                                    <div style="display:flex; align-items:center; gap:8px; flex:1;">
+                                        <input type="range" id="build-soul-hp" min="0" max="10" value="0" step="1" class="calc-slider" style="flex:1;">
+                                        <span id="build-soul-hp-val" style="font-weight:800; font-size:0.85rem; color:#fff; width:70px; text-align:right;">+0% (Lv.0)</span>
+                                    </div>
+                                </div>
+
+                                <!-- ATK Soul -->
+                                <div class="soul-row" style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:rgba(15,23,42,0.6); padding:8px 12px; border-radius:8px;">
+                                    <span style="font-size:0.82rem; color:#fb923c; font-weight:600; width:135px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-crosshairs"></i> Attack (Tấn công)</span>
+                                    <div style="display:flex; align-items:center; gap:8px; flex:1;">
+                                        <input type="range" id="build-soul-atk" min="0" max="10" value="0" step="1" class="calc-slider" style="flex:1;">
+                                        <span id="build-soul-atk-val" style="font-weight:800; font-size:0.85rem; color:#fff; width:70px; text-align:right;">+0% (Lv.0)</span>
+                                    </div>
+                                </div>
+
+                                <!-- DEF Soul -->
+                                <div class="soul-row" style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:rgba(15,23,42,0.6); padding:8px 12px; border-radius:8px;">
+                                    <span style="font-size:0.82rem; color:#38bdf8; font-weight:600; width:135px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-shield-halved"></i> Defense (Phòng thủ)</span>
+                                    <div style="display:flex; align-items:center; gap:8px; flex:1;">
+                                        <input type="range" id="build-soul-def" min="0" max="10" value="0" step="1" class="calc-slider" style="flex:1;">
+                                        <span id="build-soul-def-val" style="font-weight:800; font-size:0.85rem; color:#fff; width:70px; text-align:right;">+0% (Lv.0)</span>
+                                    </div>
+                                </div>
+
+                                <!-- Work Speed Soul -->
+                                <div class="soul-row" style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:rgba(15,23,42,0.6); padding:8px 12px; border-radius:8px;">
+                                    <span style="font-size:0.82rem; color:#60a5fa; font-weight:600; width:135px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-hammer"></i> Work Speed</span>
+                                    <div style="display:flex; align-items:center; gap:8px; flex:1;">
+                                        <input type="range" id="build-soul-work" min="0" max="20" value="0" step="1" class="calc-slider" style="flex:1;">
+                                        <span id="build-soul-work-val" style="font-weight:800; font-size:0.85rem; color:#fff; width:70px; text-align:right;">+0% (Lv.0)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h3 style="font-size:1.05rem; color:#fb923c; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                            <span style="display:flex; align-items:center; gap:8px;">
+                                <span class="step-circle" style="background:#fb923c; color:#0f172a; font-weight:800; width:24px; height:24px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:0.8rem;">4</span> Lắp Kỹ năng bị động (Tối đa 4 Skill)
+                            </span>
+                            <span id="build-passives-count" class="badge" style="background:#fb923c; color:#0f172a; font-weight:800; font-size:0.78rem; padding:3px 10px; border-radius:12px;">0 / 4 Slot</span>
+                        </h3>
+                        <p style="font-size:0.82rem; color:#94a3b8; margin-top:0; margin-bottom:12px;">
+                            Tìm và lắp đặt tối đa 4 kỹ năng bị động để tự động cộng dồn thông số hiệu ứng vào Pal của bạn.
+                        </p>
+                        
+                        <div class="passive-search-wrapper" style="margin-bottom:15px; position:relative;">
+                            <div class="search-box" style="margin-bottom:8px;">
+                                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                                <input type="text" id="build-passive-search" placeholder="🔍 Tìm nhanh Kỹ năng (VD: Legend, Thần Tốc, Bạo Lực...)..." autocomplete="off" style="width:100%;">
+                            </div>
+                            <select id="build-passive-dropdown" class="calc-select" style="width:100%; font-size:0.92rem; background:#1e293b; color:#fff; border:1px solid rgba(255,255,255,0.15); margin-bottom:8px;">
+                                <option value="">-- Chọn kỹ năng để lắp vào Slot trống --</option>
+                                <!-- Populate via JS -->
+                            </select>
+                            <button id="btn-add-passive" class="chip active" style="width:100%; justify-content:center; background:linear-gradient(135deg,#3b82f6,#2563eb); border-color:#60a5fa; color:#fff; font-weight:600; padding:10px; cursor:pointer; font-size:0.92rem;">
+                                <i class="fa-solid fa-plus"></i> Thêm Kỹ năng được chọn vào Build
+                            </button>
+                        </div>
+
+                        <div id="equipped-passives-list" class="equipped-passives-grid" style="display:grid; grid-template-columns:1fr; gap:10px; margin-top:15px;">
+                            <!-- Equipped passive cards go here -->
+                        </div>
+                    </div>
+
+                    <!-- RIGHT COLUMN: BUILD STAT SUMMARY & SAVED BUILDS -->
+                    <div class="build-summary-column" style="display:flex; flex-direction:column; gap:20px;">
+                        <!-- Character Summary Board -->
+                        <div id="build-summary-card" class="glass-panel" style="background:rgba(15,23,42,0.82); border:1px solid rgba(255,255,255,0.14); border-radius:16px; padding:24px; position:relative; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+                            <!-- Injected via JS -->
+                        </div>
+
+                        <!-- Saved Builds Section -->
+                        <div class="saved-builds-panel glass-panel" style="background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:20px;">
+                            <h3 style="font-size:1.1rem; color:#fff; margin-top:0; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;">
+                                <span><i class="fa-solid fa-folder-open text-emerald-400"></i> Danh sách Build Pal đã lưu (<span id="saved-builds-count">0</span>)</span>
+                                <button id="btn-clear-all-builds" class="chip" style="font-size:0.75rem; background:rgba(239,68,68,0.15); border-color:#ef4444; color:#f87171; cursor:pointer;">
+                                    <i class="fa-solid fa-trash"></i> Xóa tất cả
+                                </button>
+                            </h3>
+                            <div id="saved-builds-list" style="display:flex; flex-direction:column; gap:10px; max-height:360px; overflow-y:auto;">
+                                <!-- Saved builds injected via JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
         </div>
     </div>

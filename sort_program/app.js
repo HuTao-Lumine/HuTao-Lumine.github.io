@@ -12,6 +12,8 @@ let filterState = {
     elementLogic: "OR",       // "OR" (Hoặc) / "AND" (Và)
     works: [],                // Danh sách kỹ năng làm việc đã chọn ["kindling"...]
     workSortOrder: "desc",    // Sắp xếp cấp độ làm việc: "desc" (Cao->Thấp), "asc" (Thấp->Cao), "none"
+    partnerSearch: "",        // Từ khóa tìm kiếm Kỹ năng đồng hành (Partner Skill)
+    partnerCategories: [],    // Các nhóm thẻ Kỹ năng đồng hành đã chọn
     mountOnly: false,         // Chỉ hiện Pal có tốc độ cưỡi
     sortBy: "id-asc"          // Tiêu chí sắp xếp mặc định
 };
@@ -44,6 +46,132 @@ const WORK_INFO = {
     "transporting": { name: "Vận chuyển", icon: "fa-box-archive", img: "https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_11.webp" },
     "farming": { name: "Chăn thả", icon: "fa-cow", img: "https://cdn.paldb.cc/image/Pal/Texture/UI/InGame/T_icon_palwork_12.webp" }
 };
+
+// Hàm hỗ trợ lấy cấp độ kỹ năng làm việc (chuẩn hóa cả trường hợp có hoặc không có khoảng trắng như medicine production vs medicineproduction)
+function getPalWorkLevel(pal, workKey) {
+    if (!pal || !pal.work_suitability) return 0;
+    const works = pal.work_suitability;
+    if (works[workKey] !== undefined) return Number(works[workKey]) || 0;
+    
+    const normKey = String(workKey).replace(/[\s_]+/g, "").toLowerCase();
+    for (let k in works) {
+        const normK = String(k).replace(/[\s_]+/g, "").toLowerCase();
+        if (normK === normKey) {
+            return Number(works[k]) || 0;
+        }
+        if ((normKey.includes("electr") && normK.includes("electr")) ||
+            (normKey.includes("medicine") && normK.includes("medicine"))) {
+            return Number(works[k]) || 0;
+        }
+    }
+    return 0;
+}
+
+// Hàm hỗ trợ lấy thông tin icon và tên kỹ năng (chuẩn hóa cả trường hợp có hoặc không có khoảng trắng)
+function getWorkInfo(wType) {
+    if (WORK_INFO[wType]) return WORK_INFO[wType];
+    const normKey = String(wType).replace(/[\s_]+/g, "").toLowerCase();
+    for (let k in WORK_INFO) {
+        const normK = String(k).replace(/[\s_]+/g, "").toLowerCase();
+        if (normK === normKey ||
+            (normKey.includes("electr") && normK.includes("electr")) ||
+            (normKey.includes("medicine") && normK.includes("medicine"))) {
+            return WORK_INFO[k];
+        }
+    }
+    return { name: wType, icon: "fa-hammer" };
+}
+
+// ============================================================================
+// CƠ CHẾ AI SMART FINDER: ĐỌC HIỂU & PHÂN LOẠI KỸ NĂNG ĐỒNG HÀNH (PARTNER SKILLS)
+// ============================================================================
+function matchesPartnerCategory(pal, fullPsText, cat) {
+    const ps = pal.partner_skill || {};
+    const psName = (ps.name || "").toLowerCase();
+    const psDesc = (ps.description || "").toLowerCase();
+    const runSpeed = pal.mount_speed ? (pal.mount_speed.run_speed || 0) : 0;
+    const flySpeed = pal.mount_speed ? (pal.mount_speed.fly_speed || 0) : 0;
+
+    switch (cat) {
+        case "mount_land":
+            return runSpeed > 0 || fullPsText.includes("can be ridden") || fullPsText.includes("sprint") || fullPsText.includes("mounted") || fullPsText.includes("cưỡi");
+        case "mount_fly":
+            return flySpeed > 0 || fullPsText.includes("flying mount") || fullPsText.includes("fly") || fullPsText.includes("aerial") || fullPsText.includes("cưỡi bay");
+        case "mount_water":
+            return fullPsText.includes("water mount") || fullPsText.includes("swim") || fullPsText.includes("bơi") || fullPsText.includes("lướt nước");
+        case "glider":
+            return fullPsText.includes("glider") || fullPsText.includes("parachute") || fullPsText.includes("glide") || fullPsText.includes("dù lượn");
+        case "weapon":
+            return fullPsText.includes("shotgun") || fullPsText.includes("grenade") || fullPsText.includes("missile") || fullPsText.includes("launcher") || fullPsText.includes("assault rifle") || fullPsText.includes("flamethrower") || fullPsText.includes("gun") || fullPsText.includes("cannon") || fullPsText.includes("rapid fire") || fullPsText.includes("bazooka") || fullPsText.includes("bomb") || fullPsText.includes("súng") || fullPsText.includes("tên lửa") || fullPsText.includes("pháo");
+        case "buff_atk":
+            return fullPsText.includes("attack") || fullPsText.includes("damage") || fullPsText.includes("multiplier") || fullPsText.includes("weak point") || fullPsText.includes("increases player's attack") || fullPsText.includes("increases attack") || fullPsText.includes("sát thương") || fullPsText.includes("tấn công");
+        case "buff_def":
+            return fullPsText.includes("restores hp") || fullPsText.includes("heal") || fullPsText.includes("health") || fullPsText.includes("defense") || fullPsText.includes("shield") || fullPsText.includes("life drain") || fullPsText.includes("blessing") || fullPsText.includes("damage reduction") || fullPsText.includes("hồi máu") || fullPsText.includes("khiên") || fullPsText.includes("phòng thủ");
+        case "weight":
+            return fullPsText.includes("weight") || fullPsText.includes("carry capacity") || fullPsText.includes("hauler") || fullPsText.includes("carrier") || fullPsText.includes("ore") || fullPsText.includes("coal") || fullPsText.includes("sulfur") || fullPsText.includes("giảm trọng lượng");
+        case "drops":
+            return fullPsText.includes("drops extra items") || fullPsText.includes("drops more items") || fullPsText.includes("when defeated") || fullPsText.includes("harvest") || fullPsText.includes("bless the crops") || fullPsText.includes("ranch") || fullPsText.includes("gold coin") || fullPsText.includes("digs up") || (pal.ranch_drops && pal.ranch_drops.length > 0);
+        case "infuse":
+            return fullPsText.includes("changes the player's attack type") || fullPsText.includes("changes player's attack") || fullPsText.includes("applies fire") || fullPsText.includes("applies ice") || fullPsText.includes("applies dark") || fullPsText.includes("applies electric") || fullPsText.includes("applies water") || fullPsText.includes("applies grass") || fullPsText.includes("applies dragon") || fullPsText.includes("applies ground") || fullPsText.includes("infuse") || fullPsText.includes("đổi hệ");
+        case "radar":
+            return fullPsText.includes("detects") || fullPsText.includes("locates") || fullPsText.includes("radar") || fullPsText.includes("nearby dungeons") || fullPsText.includes("rare pals") || fullPsText.includes("eggs") || fullPsText.includes("dò tìm");
+        default:
+            return false;
+    }
+}
+
+function checkPartnerSkillMatch(pal, searchQuery, categories) {
+    const ps = pal.partner_skill || {};
+    const psName = (ps.name || "").toLowerCase();
+    const psDesc = (ps.description || "").toLowerCase();
+    const levelsText = (ps.levels || []).map(l => (l.value || "")).join(" ").toLowerCase();
+    const mountInfo = pal.mount_speed ? "mount ride ridden can be ridden sprint speed thú cưỡi" : "";
+    const ranchInfo = (pal.ranch_drops && pal.ranch_drops.length > 0) ? "ranch farming drops harvest chăn thả rớt đồ" : "";
+    const fullPsText = [psName, psDesc, levelsText, mountInfo, ranchInfo, pal.name.toLowerCase()].join(" ");
+
+    // 1. Kiểm tra theo từ khóa tìm kiếm (Keyword / Fuzzy matching)
+    if (searchQuery) {
+        const q = searchQuery.toLowerCase().trim();
+        let matchQuery = fullPsText.includes(q);
+
+        // Hỗ trợ từ khóa tiếng Việt tương đương & từ khóa gợi nhớ mờ
+        if (!matchQuery) {
+            if (q.includes("bay") || q.includes("lượn") || q.includes("fly")) {
+                matchQuery = fullPsText.includes("fly") || fullPsText.includes("flying") || fullPsText.includes("glider") || fullPsText.includes("glide") || fullPsText.includes("aerial");
+            } else if (q.includes("cưỡi") || q.includes("ngựa") || q.includes("ride") || q.includes("mount")) {
+                matchQuery = fullPsText.includes("can be ridden") || fullPsText.includes("mount") || (pal.mount_speed && pal.mount_speed.run_speed > 0);
+            } else if (q.includes("súng") || q.includes("bắn") || q.includes("đạn") || q.includes("tên lửa") || q.includes("pháo") || q.includes("gun") || q.includes("rocket") || q.includes("missile")) {
+                matchQuery = fullPsText.includes("shotgun") || fullPsText.includes("grenade") || fullPsText.includes("missile") || fullPsText.includes("rifle") || fullPsText.includes("flamethrower") || fullPsText.includes("gun") || fullPsText.includes("cannon") || fullPsText.includes("bomb") || fullPsText.includes("weapon");
+            } else if (q.includes("hồi máu") || q.includes("máu") || q.includes("heal") || q.includes("hp")) {
+                matchQuery = fullPsText.includes("restores hp") || fullPsText.includes("heal") || fullPsText.includes("health") || fullPsText.includes("life drain");
+            } else if (q.includes("khiên") || q.includes("phòng thủ") || q.includes("giáp") || q.includes("shield") || q.includes("def")) {
+                matchQuery = fullPsText.includes("defense") || fullPsText.includes("shield") || fullPsText.includes("damage reduction");
+            } else if (q.includes("quặng") || q.includes("đá") || q.includes("giảm cân") || q.includes("trọng lượng") || q.includes("nặng") || q.includes("weight") || q.includes("ore")) {
+                matchQuery = fullPsText.includes("weight") || fullPsText.includes("ore") || fullPsText.includes("coal") || fullPsText.includes("sulfur") || fullPsText.includes("carry capacity");
+            } else if (q.includes("rơi") || q.includes("rớt") || q.includes("drop") || q.includes("farm") || q.includes("ranch")) {
+                matchQuery = fullPsText.includes("drops extra items") || fullPsText.includes("when defeated") || fullPsText.includes("ranch") || (pal.ranch_drops && pal.ranch_drops.length > 0);
+            } else if (q.includes("radar") || q.includes("dò") || q.includes("tìm") || q.includes("detect")) {
+                matchQuery = fullPsText.includes("detects") || fullPsText.includes("locates") || fullPsText.includes("radar") || fullPsText.includes("dungeon");
+            } else {
+                // Kiểm tra tách từ: nếu tất cả từ trong câu query đều xuất hiện trong fullPsText
+                const words = q.split(/\s+/).filter(w => w.length > 1);
+                if (words.length > 1) {
+                    matchQuery = words.every(w => fullPsText.includes(w));
+                }
+            }
+        }
+        if (!matchQuery) return false;
+    }
+
+    // 2. Kiểm tra theo nhóm thẻ phân loại (Category chips)
+    if (categories && categories.length > 0) {
+        // Chế độ HOẶC: Pal khớp với ít nhất 1 thẻ được chọn
+        const matchAnyCat = categories.some(cat => matchesPartnerCategory(pal, fullPsText, cat));
+        if (!matchAnyCat) return false;
+    }
+
+    return true;
+}
 
 // Khởi chạy ứng dụng khi trang tải xong
 document.addEventListener("DOMContentLoaded", () => {
@@ -80,6 +208,9 @@ async function initApp() {
 
         // Khởi tạo hệ thống Kỹ năng bị động (Passive Skills)
         initPassivesSystem();
+
+        // Khởi tạo hệ thống Xây dựng & Tính chỉ số Pal (Build Your Pals)
+        initBuildSystem();
 
         // Lọc và render lần đầu
         applyFiltersAndRender();
@@ -130,12 +261,18 @@ function applyFiltersAndRender() {
 
         // --- Lọc theo Kỹ năng làm việc (Work Suitability) ---
         if (filterState.works.length > 0) {
-            const palWorks = pal.work_suitability || {};
             for (let work of filterState.works) {
-                const palLevel = palWorks[work] || 0;
+                const palLevel = getPalWorkLevel(pal, work);
                 if (palLevel < 1) {
                     return false; // Pal phải có kỹ năng được chọn (ít nhất Lv 1)
                 }
+            }
+        }
+
+        // --- Lọc theo Kỹ năng đồng hành (Partner Skill AI Smart Filter) ---
+        if (filterState.partnerSearch || (filterState.partnerCategories && filterState.partnerCategories.length > 0)) {
+            if (!checkPartnerSkillMatch(pal, filterState.partnerSearch, filterState.partnerCategories)) {
+                return false;
             }
         }
 
@@ -146,23 +283,27 @@ function applyFiltersAndRender() {
     filtered.sort((a, b) => {
         // --- Ưu tiên sắp xếp theo Cấp độ Kỹ năng làm việc (nếu bật) ---
         if (filterState.workSortOrder !== "none") {
-            const getWorkScore = (pal) => {
-                const works = pal.work_suitability || {};
-                if (filterState.works.length > 0) {
-                    // Nếu đã chọn kỹ năng cụ thể, tính tổng cấp độ của các kỹ năng đó
-                    return filterState.works.reduce((acc, w) => acc + (works[w] || 0), 0);
-                } else {
-                    // Nếu chưa chọn kỹ năng nào, lấy cấp độ cao nhất trong các kỹ năng của Pal
-                    const levels = Object.values(works);
-                    return levels.length > 0 ? Math.max(...levels) : 0;
+            const dir = filterState.workSortOrder === "desc" ? -1 : 1;
+
+            if (filterState.works.length > 0) {
+                // Duyệt qua từng kỹ năng theo thứ tự "ghi nhớ ẩn" (works[0], works[1]...) mà người dùng đã chọn
+                // Kỹ năng nào được chọn trước sẽ được ưu tiên so sánh cấp độ trước
+                for (let work of filterState.works) {
+                    const levelA = getPalWorkLevel(a, work);
+                    const levelB = getPalWorkLevel(b, work);
+                    if (levelA !== levelB) {
+                        return (levelA - levelB) * dir;
+                    }
                 }
-            };
-
-            const scoreA = getWorkScore(a);
-            const scoreB = getWorkScore(b);
-
-            if (scoreA !== scoreB) {
-                return filterState.workSortOrder === "desc" ? (scoreB - scoreA) : (scoreA - scoreB);
+            } else {
+                // Nếu chưa chọn kỹ năng cụ thể nào, lấy cấp độ cao nhất trong các kỹ năng của Pal
+                const levelsA = Object.keys(a.work_suitability || {}).map(k => getPalWorkLevel(a, k));
+                const levelsB = Object.keys(b.work_suitability || {}).map(k => getPalWorkLevel(b, k));
+                const maxA = levelsA.length > 0 ? Math.max(...levelsA) : 0;
+                const maxB = levelsB.length > 0 ? Math.max(...levelsB) : 0;
+                if (maxA !== maxB) {
+                    return (maxA - maxB) * dir;
+                }
             }
         }
 
@@ -177,17 +318,25 @@ function applyFiltersAndRender() {
             return (idA - idB) * dir;
         }
 
-        if (sortField === "hp" || sortField === "atk" || sortField === "def") {
+        if (sortField === "hp" || sortField === "atk" || sortField === "def" || sortField === "melee" || sortField === "support" || sortField === "stamina" || sortField === "price") {
             const statsA = a.stats || {};
             const statsB = b.stats || {};
-            const valA = statsA[sortField === "atk" ? "attack" : sortField === "def" ? "defense" : "hp"] || 0;
-            const valB = statsB[sortField === "atk" ? "attack" : sortField === "def" ? "defense" : "hp"] || 0;
+            let key = sortField;
+            if (sortField === "atk") key = "attack";
+            if (sortField === "def") key = "defense";
+            if (sortField === "melee") key = "melee_attack";
+            const valA = statsA[key] || 0;
+            const valB = statsB[key] || 0;
             return (valA - valB) * dir;
         }
 
-        if (sortField === "speed") {
-            const speedA = a.mount_speed ? (a.mount_speed.run_speed || 0) : 0;
-            const speedB = b.mount_speed ? (b.mount_speed.run_speed || 0) : 0;
+        if (sortField === "speed" || sortField === "sprint") {
+            const statsA = a.stats || {};
+            const statsB = b.stats || {};
+            const mountA = a.mount_speed || {};
+            const mountB = b.mount_speed || {};
+            const speedA = sortField === "sprint" ? (statsA.sprint_speed || mountA.sprint_speed || 0) : (statsA.run_speed || mountA.run_speed || 0);
+            const speedB = sortField === "sprint" ? (statsB.sprint_speed || mountB.sprint_speed || 0) : (statsB.run_speed || mountB.run_speed || 0);
             return (speedA - speedB) * dir;
         }
 
@@ -241,17 +390,30 @@ function renderGrid(pals) {
         // Render Huy hiệu Kỹ năng làm việc (Works)
         const works = pal.work_suitability || {};
         const worksHTML = Object.entries(works).map(([wType, wLevel]) => {
-            const info = WORK_INFO[wType] || { name: wType, icon: "fa-hammer" };
+            const info = getWorkInfo(wType);
             const iconHTML = info.img ? `<img src="${info.img}" class="badge-icon" alt="${info.name}">` : `<i class="fa-solid ${info.icon}"></i>`;
             return `<span class="badge-work" title="${info.name} Cấp ${wLevel}">${iconHTML} ${info.name}: <strong>Cấp ${wLevel}</strong></span>`;
         }).join("");
+
+        // Render Huy hiệu Nội tại / Kỹ năng đồng hành trên Thẻ (Partner Skill Summary)
+        const ps = pal.partner_skill || {};
+        const psName = ps.name || "";
+        const psDescShort = ps.description ? (ps.description.length > 68 ? ps.description.substring(0, 68) + "..." : ps.description) : "";
+        const psHTML = psName ? `
+            <div class="pal-ps-badge" title="${psName}: ${ps.description || ''}" style="margin: 6px 12px 0; padding: 4px 8px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 6px; font-size: 0.77rem; color: #fcd34d; display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                <i class="fa-solid fa-wand-magic-sparkles" style="color:#f59e0b; flex-shrink:0;"></i>
+                <span style="overflow: hidden; text-overflow: ellipsis;"><strong>${psName}</strong>${psDescShort ? ` - <span style="color:#cbd5e1; font-size:0.73rem;">${psDescShort}</span>` : ''}</span>
+            </div>
+        ` : '';
 
         // Chỉ số tóm tắt bên dưới thẻ
         const stats = pal.stats || {};
         const hp = stats.hp || "-";
         const atk = stats.attack || "-";
+        const melee = stats.melee_attack || "-";
         const def = stats.defense || "-";
-        const speed = (pal.mount_speed && pal.mount_speed.run_speed > 0) ? pal.mount_speed.run_speed : "-";
+        const workSpeed = stats.support || 100;
+        const sprint = stats.sprint_speed || (pal.mount_speed ? pal.mount_speed.sprint_speed : "-") || "-";
 
         return `
             <div class="pal-card" onclick="openPalModal('${pal.name.replace(/'/g, "\\'")}')">
@@ -265,23 +427,35 @@ function renderGrid(pals) {
                         <div class="pal-elements">${elemsHTML}</div>
                     </div>
                 </div>
-
+                ${psHTML}
                 <div class="pal-works">
                     ${worksHTML || '<span class="badge-work" style="opacity:0.5;">Không có kỹ năng làm việc</span>'}
                 </div>
 
-                <div class="pal-stats-footer">
-                    <div class="stat-box">
+                <div class="pal-stats-footer" style="grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 0.5rem;">
+                    <div class="stat-box" title="Sinh lực cơ bản (Base HP)">
                         <span class="stat-label">❤️ HP</span>
                         <span class="stat-val hp">${hp}</span>
                     </div>
-                    <div class="stat-box">
-                        <span class="stat-label">⚔️ ATK</span>
+                    <div class="stat-box" title="Tấn công tầm xa (Shot Attack)">
+                        <span class="stat-label">🏹 ATK</span>
                         <span class="stat-val atk">${atk}</span>
                     </div>
-                    <div class="stat-box">
-                        <span class="stat-label">${speed !== "-" ? "⚡ Tốc độ" : "🛡️ DEF"}</span>
-                        <span class="stat-val ${speed !== "-" ? "speed" : "def"}">${speed !== "-" ? speed : def}</span>
+                    <div class="stat-box" title="Tấn công cận chiến (Melee Attack)">
+                        <span class="stat-label">⚔️ Melee</span>
+                        <span class="stat-val" style="color:#f97316;">${melee}</span>
+                    </div>
+                    <div class="stat-box" title="Phòng thủ cơ bản (Defense)">
+                        <span class="stat-label">🛡️ DEF</span>
+                        <span class="stat-val def">${def}</span>
+                    </div>
+                    <div class="stat-box" title="Tốc độ làm việc nền (Support / Work Speed)">
+                        <span class="stat-label">🛠️ Work</span>
+                        <span class="stat-val" style="color:#60a5fa;">${workSpeed}</span>
+                    </div>
+                    <div class="stat-box" title="Tốc độ lướt nhanh nhất (Sprint Speed)">
+                        <span class="stat-label">🚀 Sprint</span>
+                        <span class="stat-val speed">${sprint}</span>
                     </div>
                 </div>
             </div>
@@ -387,6 +561,11 @@ function setupEventListeners() {
                 filterState.works.push(work);
                 chip.classList.add("active");
             }
+            if (filterState.works.length > 0 && filterState.workSortOrder === "none") {
+                filterState.workSortOrder = "desc";
+                const sortSelect = document.getElementById("work-sort-order");
+                if (sortSelect) sortSelect.value = "desc";
+            }
             applyFiltersAndRender();
         });
     });
@@ -395,6 +574,42 @@ function setupEventListeners() {
     document.getElementById("work-sort-order").addEventListener("change", (e) => {
         filterState.workSortOrder = e.target.value;
         applyFiltersAndRender();
+    });
+
+    // 4.5. Lọc & Tìm kiếm Kỹ năng đồng hành (Partner Skills Smart Filter)
+    const partnerSearchInput = document.getElementById("partner-skill-search");
+    const clearPartnerBtn = document.getElementById("clear-partner-search");
+    if (partnerSearchInput) {
+        partnerSearchInput.addEventListener("input", (e) => {
+            filterState.partnerSearch = e.target.value.trim();
+            if (filterState.partnerSearch) {
+                clearPartnerBtn.classList.remove("hidden");
+            } else {
+                clearPartnerBtn.classList.add("hidden");
+            }
+            applyFiltersAndRender();
+        });
+        clearPartnerBtn.addEventListener("click", () => {
+            partnerSearchInput.value = "";
+            filterState.partnerSearch = "";
+            clearPartnerBtn.classList.add("hidden");
+            applyFiltersAndRender();
+        });
+    }
+
+    const partnerChips = document.querySelectorAll(".partner-chip");
+    partnerChips.forEach(chip => {
+        chip.addEventListener("click", () => {
+            const partner = chip.dataset.partner;
+            if (filterState.partnerCategories.includes(partner)) {
+                filterState.partnerCategories = filterState.partnerCategories.filter(p => p !== partner);
+                chip.classList.remove("active");
+            } else {
+                filterState.partnerCategories.push(partner);
+                chip.classList.add("active");
+            }
+            applyFiltersAndRender();
+        });
     });
 
     // 5. Nút Chỉ hiện Thú cưỡi (Mount Only)
@@ -413,6 +628,8 @@ function setupEventListeners() {
             elementLogic: "OR",
             works: [],
             workSortOrder: "desc",
+            partnerSearch: "",
+            partnerCategories: [],
             mountOnly: false,
             sortBy: "id-asc"
         };
@@ -420,6 +637,8 @@ function setupEventListeners() {
         // UI Reset
         searchInput.value = "";
         clearSearchBtn.classList.add("hidden");
+        if (partnerSearchInput) partnerSearchInput.value = "";
+        if (clearPartnerBtn) clearPartnerBtn.classList.add("hidden");
         document.getElementById("sort-select").value = "id-asc";
         document.getElementById("work-sort-order").value = "desc";
 
@@ -430,6 +649,7 @@ function setupEventListeners() {
         btnAND.classList.remove("active");
 
         workChips.forEach(c => c.classList.remove("active"));
+        partnerChips.forEach(c => c.classList.remove("active"));
         mountBtn.classList.remove("active");
 
         applyFiltersAndRender();
@@ -469,7 +689,7 @@ function openPalModal(palName) {
 
     const works = pal.work_suitability || {};
     const worksHTML = Object.entries(works).map(([wType, wLevel]) => {
-        const info = WORK_INFO[wType] || { name: wType, icon: "fa-hammer" };
+        const info = getWorkInfo(wType);
         const iconHTML = info.img ? `<img src="${info.img}" class="badge-icon" alt="${info.name}">` : `<i class="fa-solid ${info.icon}"></i>`;
         return `<span class="badge-work">${iconHTML} ${info.name}: <strong>Cấp ${wLevel}</strong></span>`;
     }).join("");
@@ -592,39 +812,73 @@ function openPalModal(palName) {
             </div>
         </div>
 
-        <div class="modal-section-title"><i class="fa-solid fa-chart-simple text-blue-400"></i> Chỉ số chiến đấu cơ bản (Base Stats)</div>
-        <div class="modal-grid-stats">
-            <div class="modal-stat-card">
-                <span class="label">❤️ Sinh lực (HP)</span>
+        <div class="modal-section-title"><i class="fa-solid fa-chart-line text-blue-400"></i> Thông số chiến đấu & Thể chất cơ bản (Base Combat & Biology Stats)</div>
+        <div class="modal-grid-stats detailed-grid">
+            <div class="modal-stat-card border-l-4 border-l-red-500">
+                <span class="label">❤️ Sinh lực cơ bản (Base HP)</span>
                 <span class="val" style="color:#f87171;">${stats.hp || "-"}</span>
+                <span class="sub-desc">Tối đa Lv.80: ${stats.max_hp || 'N/A'}</span>
             </div>
-            <div class="modal-stat-card">
-                <span class="label">⚔️ Tấn công (ATK)</span>
+            <div class="modal-stat-card border-l-4 border-l-orange-500">
+                <span class="label">🏹 Tấn công tầm xa (Shot Attack)</span>
                 <span class="val" style="color:#fb923c;">${stats.attack || "-"}</span>
+                <span class="sub-desc">Tối đa Lv.80: ${stats.max_attack || 'N/A'}</span>
             </div>
-            <div class="modal-stat-card">
-                <span class="label">🛡️ Phòng thủ (DEF)</span>
+            <div class="modal-stat-card border-l-4 border-l-amber-500">
+                <span class="label">⚔️ Tấn công cận chiến (Melee Attack)</span>
+                <span class="val" style="color:#f59e0b;">${stats.melee_attack || "-"}</span>
+                <span class="sub-desc">Sát thương kỹ năng tầm gần</span>
+            </div>
+            <div class="modal-stat-card border-l-4 border-l-sky-500">
+                <span class="label">🛡️ Phòng thủ cơ bản (Defense)</span>
                 <span class="val" style="color:#38bdf8;">${stats.defense || "-"}</span>
+                <span class="sub-desc">Tối đa Lv.80: ${stats.max_defense || 'N/A'}</span>
+            </div>
+            <div class="modal-stat-card border-l-4 border-l-indigo-500">
+                <span class="label">🛠️ Hỗ trợ & Tốc độ làm việc (Support)</span>
+                <span class="val" style="color:#818cf8;">${stats.support || 100}</span>
+                <span class="sub-desc">Nền tảng tốc độ xây/chế tạo</span>
+            </div>
+            <div class="modal-stat-card border-l-4 border-l-purple-500">
+                <span class="label">⚡ Dung lượng thể lực (Stamina)</span>
+                <span class="val" style="color:#c084fc;">${stats.stamina || 100}</span>
+                <span class="sub-desc">Tiêu hao khi lướt/bay/tấn công</span>
             </div>
         </div>
 
-        ${mount.run_speed > 0 ? `
-            <div class="modal-section-title"><i class="fa-solid fa-horse text-yellow-400"></i> Tốc độ di chuyển / Thú cưỡi (Mount Speed)</div>
-            <div class="modal-grid-stats">
-                <div class="modal-stat-card">
-                    <span class="label">🏃 Tốc độ chạy (Run)</span>
-                    <span class="val" style="color:#facc15;">${mount.run_speed}</span>
-                </div>
-                <div class="modal-stat-card">
-                    <span class="label">⚡ Tốc độ nước rút (Sprint)</span>
-                    <span class="val" style="color:#eab308;">${mount.sprint_speed}</span>
-                </div>
-                <div class="modal-stat-card">
-                    <span class="label">🔋 Thể lực (Stamina)</span>
-                    <span class="val" style="color:#a855f7;">${mount.stamina}</span>
-                </div>
+        <div class="modal-section-title"><i class="fa-solid fa-gauge-high text-yellow-400"></i> Tốc độ di chuyển & Giá trị sinh học (Movement Speeds & Biology)</div>
+        <div class="modal-grid-stats detailed-grid">
+            <div class="modal-stat-card border-l-4 border-l-yellow-400">
+                <span class="label">🚀 Tốc độ lướt / Nhanh (Sprint Speed)</span>
+                <span class="val" style="color:#facc15;">${stats.sprint_speed || (mount.sprint_speed > 0 ? mount.sprint_speed : "-")}</span>
+                <span class="sub-desc">Tốc độ tối đa khi cưỡi nước rút</span>
             </div>
-        ` : ''}
+            <div class="modal-stat-card border-l-4 border-l-amber-400">
+                <span class="label">🐎 Tốc độ chạy thường (Running Speed)</span>
+                <span class="val" style="color:#fbbf24;">${stats.run_speed || (mount.run_speed > 0 ? mount.run_speed : "-")}</span>
+                <span class="sub-desc">Tốc độ di chuyển tiêu chuẩn</span>
+            </div>
+            <div class="modal-stat-card border-l-4 border-l-stone-400">
+                <span class="label">🐢 Tốc độ đi bộ (Slow Walk Speed)</span>
+                <span class="val" style="color:#a8a29e;">${stats.slow_walk_speed || 50}</span>
+                <span class="sub-desc">Tốc độ khi mang vác quá tải</span>
+            </div>
+            <div class="modal-stat-card border-l-4 border-l-emerald-400">
+                <span class="label">💰 Giá bán tiêu chuẩn (Gold Coin Price)</span>
+                <span class="val" style="color:#34d399;">${(stats.price || 100).toLocaleString('vi-VN')} Vàng</span>
+                <span class="sub-desc">Phẩm chất (Rarity): Rank ${stats.rarity || 1}</span>
+            </div>
+            <div class="modal-stat-card border-l-4 border-l-pink-400">
+                <span class="label">🍖 Lượng thức ăn & Chỉ số đói (Food Bar)</span>
+                <span class="val" style="color:#f472b6;">${stats.food || 100} điểm</span>
+                <span class="sub-desc">Tiêu thụ: ${stats.food_amount || 1} 🍞 | Size: ${stats.size || 'M'}</span>
+            </div>
+            <div class="modal-stat-card border-l-4 border-l-cyan-400">
+                <span class="label">⚖️ Tỉ lệ giới tính (Gender Ratio)</span>
+                <span class="val" style="color:#22d3ee; font-size:1.1rem;">♂️ ${stats.male_prob || 50}% / ♀️ ${100 - (stats.male_prob || 50)}%</span>
+                <span class="sub-desc">Tỉ lệ sinh ra đực/cái khi lai tạo</span>
+            </div>
+        </div>
 
         ${partnerSkillHTML}
 
@@ -658,19 +912,23 @@ async function initMapsSystem() {
     const tabPals = document.getElementById("tab-btn-pals");
     const tabMaps = document.getElementById("tab-btn-maps");
     const tabPassives = document.getElementById("tab-btn-passives");
+    const tabBuild = document.getElementById("tab-btn-build");
     const viewPals = document.getElementById("view-pals");
     const viewMaps = document.getElementById("view-maps");
     const viewPassives = document.getElementById("view-passives");
+    const viewBuild = document.getElementById("view-build");
 
     function switchTab(mode) {
         currentMode = mode;
         if (tabPals) tabPals.classList.toggle("active", mode === "pals");
         if (tabMaps) tabMaps.classList.toggle("active", mode === "maps");
         if (tabPassives) tabPassives.classList.toggle("active", mode === "passives");
+        if (tabBuild) tabBuild.classList.toggle("active", mode === "build");
 
         if (viewPals) viewPals.classList.toggle("hidden", mode !== "pals");
         if (viewMaps) viewMaps.classList.toggle("hidden", mode !== "maps");
         if (viewPassives) viewPassives.classList.toggle("hidden", mode !== "passives");
+        if (viewBuild) viewBuild.classList.toggle("hidden", mode !== "build");
 
         if (mode === "maps") {
             if (!leafletMap) {
@@ -678,12 +936,18 @@ async function initMapsSystem() {
             } else {
                 setTimeout(() => leafletMap.invalidateSize(), 150);
             }
+        } else if (mode === "build") {
+            if (!buildState.selectedPalId && PALS_DATA.length > 0) {
+                buildState.selectedPalId = PALS_DATA[0].id;
+            }
+            updateBuildUI();
         }
     }
 
     if (tabPals) tabPals.addEventListener("click", () => switchTab("pals"));
     if (tabMaps) tabMaps.addEventListener("click", () => switchTab("maps"));
     if (tabPassives) tabPassives.addEventListener("click", () => switchTab("passives"));
+    if (tabBuild) tabBuild.addEventListener("click", () => switchTab("build"));
 
     // 2. Tải dữ liệu bản đồ map_spawn_data.json (Hỗ trợ mở trực tiếp file:// qua window.MAP_SPAWN_DATA hoặc fetch từ server)
     if (window.MAP_SPAWN_DATA) {
@@ -1215,10 +1479,30 @@ function renderMapMarkers() {
 // ============================================================================
 // HỆ THỐNG KỸ NĂNG BỊ ĐỘNG (PASSIVE SKILLS)
 // ============================================================================
+function removeVietnameseTones(str) {
+    if (!str) return "";
+    str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+    str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+    str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+    str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+    str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+    str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+    str = str.replace(/đ/g, "d");
+    str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
+    str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
+    str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
+    str = str.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
+    str = str.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
+    str = str.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
+    str = str.replace(/Đ/g, "D");
+    return str.toLowerCase();
+}
+
 let allPassivesData = [];
 let passivesFilterState = {
     search: "",
     category: "pal", // "pal" (chỉ Pal 114 kỹ năng) hoặc "all" (tất cả 309 kỹ năng)
+    utilityTag: "all", // "all", "attack", "defense", "work", "speed", "stamina", "san", "hunger", "hp", "element", "cooldown", "harvest"
     sortBy: "tier_desc" // "tier_desc", "tier_asc", "name_asc", "name_desc"
 };
 
@@ -1268,7 +1552,18 @@ async function initPassivesSystem() {
         });
     });
 
-    // 4. Render lần đầu
+    // 4. Gắn sự kiện chọn lọc nhanh công dụng (Quick Utility Tags)
+    const utilChips = document.querySelectorAll(".passive-utility-chip");
+    utilChips.forEach(chip => {
+        chip.addEventListener("click", () => {
+            utilChips.forEach(c => c.classList.remove("active"));
+            chip.classList.add("active");
+            passivesFilterState.utilityTag = chip.dataset.utility;
+            applyPassivesFiltersAndRender();
+        });
+    });
+
+    // 5. Render lần đầu
     applyPassivesFiltersAndRender();
 }
 
@@ -1281,12 +1576,53 @@ function applyPassivesFiltersAndRender() {
             return false;
         }
 
-        // Lọc theo từ khóa tìm kiếm (tên EN, tên VI, hoặc mô tả chỉ số)
+        // Gom toàn bộ nội dung tên và mô tả chi tiết để tìm kiếm (cả VI, EN và công dụng)
+        const fullTextOriginal = [
+            item.name || "",
+            item.name_vi || "",
+            item.name_en || "",
+            item.desc || "",
+            item.desc_vi || "",
+            item.desc_en || ""
+        ].join(" ").toLowerCase();
+
+        const fullTextNoTones = removeVietnameseTones(fullTextOriginal);
+
+        // Lọc nhanh theo Utility Tag chip
+        if (passivesFilterState.utilityTag && passivesFilterState.utilityTag !== "all") {
+            const tag = passivesFilterState.utilityTag;
+            let tagMatch = false;
+            if (tag === "attack") tagMatch = fullTextOriginal.includes("tấn công") || fullTextOriginal.includes("attack") || fullTextOriginal.includes("sát thương") || fullTextOriginal.includes("damage");
+            if (tag === "defense") tagMatch = fullTextOriginal.includes("phòng thủ") || fullTextOriginal.includes("defense") || fullTextOriginal.includes("giáp") || fullTextOriginal.includes("chịu sát thương");
+            if (tag === "work") tagMatch = fullTextOriginal.includes("tốc độ làm việc") || fullTextOriginal.includes("work speed") || fullTextOriginal.includes("chặt cây") || fullTextOriginal.includes("đào đá") || fullTextOriginal.includes("khai thác");
+            if (tag === "speed") tagMatch = fullTextOriginal.includes("tốc độ di chuyển") || fullTextOriginal.includes("movement speed") || fullTextOriginal.includes("nhanh nhẹn") || fullTextOriginal.includes("tốc độ cưỡi");
+            if (tag === "stamina") tagMatch = fullTextOriginal.includes("thể lực") || fullTextOriginal.includes("stamina");
+            if (tag === "san") tagMatch = fullTextOriginal.includes("minh mẫn") || fullTextOriginal.includes("san");
+            if (tag === "hunger") tagMatch = fullTextOriginal.includes("mức độ no") || fullTextOriginal.includes("hunger") || fullTextOriginal.includes("đói");
+            if (tag === "hp") tagMatch = fullTextOriginal.includes("máu tối đa") || fullTextOriginal.includes("max health") || fullTextOriginal.includes("sinh lực") || fullTextOriginal.includes("hp");
+            if (tag === "element") tagMatch = fullTextOriginal.includes("sát thương hệ") || fullTextOriginal.includes("sát thương rồng") || fullTextOriginal.includes("sát thương lửa") || fullTextOriginal.includes("sát thương băng") || fullTextOriginal.includes("sát thương bóng tối") || fullTextOriginal.includes("sát thương thảo") || fullTextOriginal.includes("sát thương nước") || fullTextOriginal.includes("sát thương lôi") || fullTextOriginal.includes("sát thương đất") || fullTextOriginal.includes("dragon") || fullTextOriginal.includes("fire") || fullTextOriginal.includes("ice") || fullTextOriginal.includes("dark") || fullTextOriginal.includes("grass") || fullTextOriginal.includes("water") || fullTextOriginal.includes("electric") || fullTextOriginal.includes("ground");
+            if (tag === "cooldown") tagMatch = fullTextOriginal.includes("hồi chiêu") || fullTextOriginal.includes("cool time") || fullTextOriginal.includes("cooldown");
+            if (tag === "harvest") tagMatch = fullTextOriginal.includes("chặt cây") || fullTextOriginal.includes("đào đá") || fullTextOriginal.includes("cây thế giới") || fullTextOriginal.includes("harvestables");
+
+            if (!tagMatch) return false;
+        }
+
+        // Lọc theo từ khóa tìm kiếm trong ô input
         if (passivesFilterState.search) {
-            const query = passivesFilterState.search;
-            const matchName = item.name.toLowerCase().includes(query) || (item.name_en && item.name_en.toLowerCase().includes(query)) || (item.name_vi && item.name_vi.toLowerCase().includes(query));
-            const matchDesc = item.desc && item.desc.toLowerCase().includes(query);
-            return matchName || matchDesc;
+            const query = passivesFilterState.search.trim().toLowerCase();
+            const queryNoTones = removeVietnameseTones(query);
+
+            // Tách các từ khóa (keywords) để hỗ trợ tìm kiếm AND (tất cả các từ khóa người dùng gõ phải có mặt trong tên hoặc mô tả công dụng)
+            // Ví dụ gõ "làm việc -20" hay "toc do minh man" hay "attack 20%"
+            const tokens = query.split(/\s+/).filter(Boolean);
+            const tokensNoTones = queryNoTones.split(/\s+/).filter(Boolean);
+
+            const allTokensMatched = tokens.every((token, idx) => {
+                const tokenNoTone = tokensNoTones[idx] || token;
+                return fullTextOriginal.includes(token) || fullTextNoTones.includes(tokenNoTone);
+            });
+
+            if (!allTokensMatched) return false;
         }
 
         return true;
@@ -1364,5 +1700,576 @@ function renderPassivesGrid(items) {
             </div>
         `;
     }).join("");
+}
+
+// ============================================================================
+// HỆ THỐNG XÂY DỰNG & TÍNH CHỈ SỐ PALS (BUILD YOUR PALS)
+// ============================================================================
+let buildState = {
+    selectedPalId: "",
+    level: 80,
+    rank: 0.20,
+    iv: 15,
+    soulHp: 0,   // Level 0 - 10
+    soulAtk: 0,  // Level 0 - 10
+    soulDef: 0,  // Level 0 - 10
+    soulWork: 0, // Level 0 - 20
+    equippedPassives: [] // mảng chứa tối đa 4 object kỹ năng bị động
+};
+
+function extractPassiveModifiers(item) {
+    if (!item) return { atk: 0, def: 0, hp: 0, work: 0, speed: 0 };
+    const text = (item.desc_vi || item.desc || item.desc_en || '').replace(/ %/g, '%').replace(/,0%/g, '%').toLowerCase();
+    
+    let atk = 0, def = 0, hp = 0, work = 0, speed = 0;
+    
+    const atkMatches = [...text.matchAll(/(?:tấn công|attack)\s*([+-]?\s*\d+(?:\.\d+)?)%/g)];
+    atkMatches.forEach(m => atk += parseFloat(m[1].replace(/\s+/g, '')));
+    
+    const defMatches = [...text.matchAll(/(?:phòng thủ|defense)\s*([+-]?\s*\d+(?:\.\d+)?)%/g)];
+    defMatches.forEach(m => def += parseFloat(m[1].replace(/\s+/g, '')));
+    
+    const hpMatches = [...text.matchAll(/(?:máu tối đa|max health|hp|sinh lực)\s*([+-]?\s*\d+(?:\.\d+)?)%/g)];
+    hpMatches.forEach(m => hp += parseFloat(m[1].replace(/\s+/g, '')));
+    
+    const workMatches = [...text.matchAll(/(?:tốc độ làm việc|work speed)\s*([+-]?\s*\d+(?:\.\d+)?)%/g)];
+    workMatches.forEach(m => work += parseFloat(m[1].replace(/\s+/g, '')));
+    
+    const speedMatches = [...text.matchAll(/(?:tốc độ di chuyển|movement speed)\s*([+-]?\s*\d+(?:\.\d+)?)%/g)];
+    speedMatches.forEach(m => speed += parseFloat(m[1].replace(/\s+/g, '')));
+    
+    if (speed === 0) {
+        const speedMatches2 = [...text.matchAll(/(tăng|giảm)\s*tốc độ di chuyển\s*(\d+(?:\.\d+)?)%/g)];
+        speedMatches2.forEach(m => {
+            const val = parseFloat(m[2]);
+            speed += (m[1] === 'tăng' ? val : -val);
+        });
+    }
+
+    return { atk, def, hp, work, speed };
+}
+
+function initBuildSystem() {
+    const palSelect = document.getElementById("build-pal-select");
+    const palSearch = document.getElementById("build-pal-search");
+    const passiveDropdown = document.getElementById("build-passive-dropdown");
+    const passiveSearch = document.getElementById("build-passive-search");
+    const btnAddPassive = document.getElementById("btn-add-passive");
+    
+    const levelSlider = document.getElementById("build-level");
+    const rankSelect = document.getElementById("build-rank");
+    const ivSlider = document.getElementById("build-iv");
+    
+    const soulHpSlider = document.getElementById("build-soul-hp");
+    const soulAtkSlider = document.getElementById("build-soul-atk");
+    const soulDefSlider = document.getElementById("build-soul-def");
+    const soulWorkSlider = document.getElementById("build-soul-work");
+    const btnResetSouls = document.getElementById("btn-reset-souls");
+    
+    const btnReset = document.getElementById("btn-reset-build");
+    const btnSave = document.getElementById("btn-save-build");
+    const btnClearSaved = document.getElementById("btn-clear-all-builds");
+
+    // Populate Pal Selector
+    if (palSelect && allPals.length > 0) {
+        const sortedPals = [...allPals].sort((a, b) => a.name.localeCompare(b.name));
+        palSelect.innerHTML = sortedPals.map(p => `<option value="${p.id}">#${p.id || '?'} - ${p.name}</option>`).join("");
+        if (!buildState.selectedPalId) {
+            buildState.selectedPalId = sortedPals[0].id;
+        } else {
+            palSelect.value = buildState.selectedPalId;
+        }
+    }
+
+    // Pal search typing
+    if (palSearch && palSelect) {
+        palSearch.addEventListener("input", (e) => {
+            const q = e.target.value.trim().toLowerCase();
+            if (!q) return;
+            const match = allPals.find(p => p.name.toLowerCase().includes(q) || String(p.id) === q || (p.code && p.code.toLowerCase().includes(q)));
+            if (match) {
+                palSelect.value = match.id;
+                buildState.selectedPalId = match.id;
+                updateBuildUI();
+            }
+        });
+    }
+
+    if (palSelect) {
+        palSelect.addEventListener("change", (e) => {
+            buildState.selectedPalId = e.target.value;
+            updateBuildUI();
+        });
+    }
+
+    // Populate Passive Dropdown
+    function populateBuildPassivesDropdown(query = "") {
+        if (!passiveDropdown) return;
+        let passivesToList = allPassivesData && allPassivesData.length > 0 ? allPassivesData : [];
+        if (query) {
+            const qLower = removeVietnameseTones(query.toLowerCase());
+            passivesToList = passivesToList.filter(item => {
+                const full = removeVietnameseTones([item.name, item.name_vi, item.desc, item.desc_vi].join(" ").toLowerCase());
+                return full.includes(qLower);
+            });
+        }
+        passiveDropdown.innerHTML = `<option value="">-- Chọn kỹ năng để lắp vào Slot trống (${passivesToList.length} kỹ năng) --</option>` +
+            passivesToList.map(item => `<option value="${item.id}">${item.name} (${item.rank_label}) - ${item.desc_vi || item.desc || ''}</option>`).join("");
+    }
+
+    populateBuildPassivesDropdown();
+
+    if (passiveSearch) {
+        passiveSearch.addEventListener("input", (e) => {
+            populateBuildPassivesDropdown(e.target.value.trim());
+        });
+    }
+
+    // Add passive
+    if (btnAddPassive && passiveDropdown) {
+        btnAddPassive.addEventListener("click", () => {
+            const selectedId = passiveDropdown.value;
+            if (!selectedId) {
+                alert("Vui lòng chọn một Kỹ năng bị động từ danh sách dropdown trước khi bấm Thêm!");
+                return;
+            }
+            if (buildState.equippedPassives.length >= 4) {
+                alert("Mỗi Pal chỉ có thể trang bị tối đa 4 Kỹ năng bị động theo đúng cơ chế Palworld!");
+                return;
+            }
+            const passiveObj = allPassivesData.find(item => item.id === selectedId);
+            if (passiveObj) {
+                // Check if already equipped
+                if (buildState.equippedPassives.some(p => p.id === passiveObj.id)) {
+                    alert("Kỹ năng bị động này đã được trang bị cho Pal rồi!");
+                    return;
+                }
+                buildState.equippedPassives.push(passiveObj);
+                updateBuildUI();
+            }
+        });
+    }
+
+    // Controls listeners
+    if (levelSlider) {
+        levelSlider.addEventListener("input", (e) => {
+            buildState.level = parseInt(e.target.value) || 80;
+            document.getElementById("build-level-val").textContent = buildState.level;
+            updateBuildUI();
+        });
+    }
+    if (rankSelect) {
+        rankSelect.addEventListener("change", (e) => {
+            buildState.rank = parseFloat(e.target.value) || 0;
+            updateBuildUI();
+        });
+    }
+    if (ivSlider) {
+        ivSlider.addEventListener("input", (e) => {
+            buildState.iv = parseInt(e.target.value) || 0;
+            document.getElementById("build-iv-val").textContent = `${buildState.iv}% (IV ${Math.round((buildState.iv/30)*100)})`;
+            updateBuildUI();
+        });
+    }
+    
+    // Soul Sliders listeners
+    if (soulHpSlider) {
+        soulHpSlider.addEventListener("input", (e) => {
+            buildState.soulHp = parseInt(e.target.value) || 0;
+            const displayEl = document.getElementById("build-soul-hp-val");
+            if (displayEl) displayEl.textContent = `+${buildState.soulHp * 3}% (Lv.${buildState.soulHp})`;
+            updateBuildUI();
+        });
+    }
+    if (soulAtkSlider) {
+        soulAtkSlider.addEventListener("input", (e) => {
+            buildState.soulAtk = parseInt(e.target.value) || 0;
+            const displayEl = document.getElementById("build-soul-atk-val");
+            if (displayEl) displayEl.textContent = `+${buildState.soulAtk * 3}% (Lv.${buildState.soulAtk})`;
+            updateBuildUI();
+        });
+    }
+    if (soulDefSlider) {
+        soulDefSlider.addEventListener("input", (e) => {
+            buildState.soulDef = parseInt(e.target.value) || 0;
+            const displayEl = document.getElementById("build-soul-def-val");
+            if (displayEl) displayEl.textContent = `+${buildState.soulDef * 3}% (Lv.${buildState.soulDef})`;
+            updateBuildUI();
+        });
+    }
+    if (soulWorkSlider) {
+        soulWorkSlider.addEventListener("input", (e) => {
+            buildState.soulWork = parseInt(e.target.value) || 0;
+            const displayEl = document.getElementById("build-soul-work-val");
+            if (displayEl) displayEl.textContent = `+${buildState.soulWork * 6}% (Lv.${buildState.soulWork})`;
+            updateBuildUI();
+        });
+    }
+    if (btnResetSouls) {
+        btnResetSouls.addEventListener("click", () => {
+            buildState.soulHp = 0;
+            buildState.soulAtk = 0;
+            buildState.soulDef = 0;
+            buildState.soulWork = 0;
+            if (soulHpSlider) soulHpSlider.value = 0;
+            if (soulAtkSlider) soulAtkSlider.value = 0;
+            if (soulDefSlider) soulDefSlider.value = 0;
+            if (soulWorkSlider) soulWorkSlider.value = 0;
+            if (document.getElementById("build-soul-hp-val")) document.getElementById("build-soul-hp-val").textContent = "+0% (Lv.0)";
+            if (document.getElementById("build-soul-atk-val")) document.getElementById("build-soul-atk-val").textContent = "+0% (Lv.0)";
+            if (document.getElementById("build-soul-def-val")) document.getElementById("build-soul-def-val").textContent = "+0% (Lv.0)";
+            if (document.getElementById("build-soul-work-val")) document.getElementById("build-soul-work-val").textContent = "+0% (Lv.0)";
+            updateBuildUI();
+        });
+    }
+
+    if (btnReset) {
+        btnReset.addEventListener("click", () => {
+            buildState.level = 80;
+            buildState.rank = 0.20;
+            buildState.iv = 15;
+            buildState.soulHp = 0;
+            buildState.soulAtk = 0;
+            buildState.soulDef = 0;
+            buildState.soulWork = 0;
+            buildState.equippedPassives = [];
+            if (levelSlider) levelSlider.value = 80;
+            if (document.getElementById("build-level-val")) document.getElementById("build-level-val").textContent = 80;
+            if (rankSelect) rankSelect.value = "0.20";
+            if (ivSlider) ivSlider.value = 15;
+            if (document.getElementById("build-iv-val")) document.getElementById("build-iv-val").textContent = "15% (IV 50)";
+            if (soulHpSlider) soulHpSlider.value = 0;
+            if (soulAtkSlider) soulAtkSlider.value = 0;
+            if (soulDefSlider) soulDefSlider.value = 0;
+            if (soulWorkSlider) soulWorkSlider.value = 0;
+            if (document.getElementById("build-soul-hp-val")) document.getElementById("build-soul-hp-val").textContent = "+0% (Lv.0)";
+            if (document.getElementById("build-soul-atk-val")) document.getElementById("build-soul-atk-val").textContent = "+0% (Lv.0)";
+            if (document.getElementById("build-soul-def-val")) document.getElementById("build-soul-def-val").textContent = "+0% (Lv.0)";
+            if (document.getElementById("build-soul-work-val")) document.getElementById("build-soul-work-val").textContent = "+0% (Lv.0)";
+            updateBuildUI();
+        });
+    }
+
+    if (btnSave) {
+        btnSave.addEventListener("click", saveCurrentBuild);
+    }
+    if (btnClearSaved) {
+        btnClearSaved.addEventListener("click", () => {
+            if (confirm("Bạn có chắc chắn muốn xóa toàn bộ danh sách Build Pal đã lưu không?")) {
+                localStorage.removeItem("saved_pal_builds");
+                renderSavedBuilds();
+            }
+        });
+    }
+
+    renderSavedBuilds();
+}
+
+function removeEquippedPassive(index) {
+    buildState.equippedPassives.splice(index, 1);
+    updateBuildUI();
+}
+
+function updateBuildUI() {
+    const pal = allPals.find(p => p.id === buildState.selectedPalId) || allPals[0];
+    if (!pal) return;
+
+    // Update slots count
+    const countEl = document.getElementById("build-passives-count");
+    if (countEl) countEl.textContent = `${buildState.equippedPassives.length} / 4 Slot`;
+
+    // Render slots
+    const slotsContainer = document.getElementById("equipped-passives-list");
+    if (slotsContainer) {
+        let slotsHTML = "";
+        for (let i = 0; i < 4; i++) {
+            const item = buildState.equippedPassives[i];
+            if (item) {
+                const mod = extractPassiveModifiers(item);
+                const modTags = [
+                    mod.atk ? `<span style="color:#fb923c;">ATK ${mod.atk > 0 ? '+' : ''}${mod.atk}%</span>` : '',
+                    mod.def ? `<span style="color:#38bdf8;">DEF ${mod.def > 0 ? '+' : ''}${mod.def}%</span>` : '',
+                    mod.hp ? `<span style="color:#f87171;">HP ${mod.hp > 0 ? '+' : ''}${mod.hp}%</span>` : '',
+                    mod.work ? `<span style="color:#60a5fa;">Work ${mod.work > 0 ? '+' : ''}${mod.work}%</span>` : '',
+                    mod.speed ? `<span style="color:#facc15;">Speed ${mod.speed > 0 ? '+' : ''}${mod.speed}%</span>` : ''
+                ].filter(Boolean).join(" | ");
+
+                slotsHTML += `
+                    <div class="equipped-slot-card">
+                        <div class="equipped-slot-info">
+                            <div class="equipped-slot-name">
+                                <span class="badge" style="background:#334155; color:#facc15; font-size:0.75rem;">Slot ${i+1}</span>
+                                <span>${item.name}</span>
+                            </div>
+                            <div class="equipped-slot-desc">${item.desc_vi || item.desc || ''}</div>
+                            ${modTags ? `<div style="font-size:0.78rem; font-weight:700; margin-top:4px;">Hệ số: ${modTags}</div>` : ''}
+                        </div>
+                        <button class="remove-slot-btn" onclick="removeEquippedPassive(${i})" title="Tháo kỹ năng này">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                `;
+            } else {
+                slotsHTML += `
+                    <div class="equipped-slot-card empty-slot">
+                        <span><i class="fa-solid fa-circle-plus"></i> Slot ${i+1} trống (Chọn kỹ năng từ ô tìm kiếm trên để lắp vào)</span>
+                    </div>
+                `;
+            }
+        }
+        slotsContainer.innerHTML = slotsHTML;
+    }
+
+    // Calculate total passive stat bonuses
+    let totalPassiveAtk = 0, totalPassiveDef = 0, totalPassiveHp = 0, totalPassiveWork = 0, totalPassiveSpeed = 0;
+    buildState.equippedPassives.forEach(item => {
+        const mod = extractPassiveModifiers(item);
+        totalPassiveAtk += mod.atk;
+        totalPassiveDef += mod.def;
+        totalPassiveHp += mod.hp;
+        totalPassiveWork += mod.work;
+        totalPassiveSpeed += mod.speed;
+    });
+
+    const stats = pal.stats || {};
+    const baseHp = stats.hp || 100;
+    const baseAtk = stats.attack || 100;
+    const baseDef = stats.defense || 100;
+    
+    const lv = buildState.level;
+    const ivRatio = buildState.iv / 100;
+    const rankBonus = buildState.rank;
+    const soulHpBonus = buildState.soulHp * 0.03;
+    const soulAtkBonus = buildState.soulAtk * 0.03;
+    const soulDefBonus = buildState.soulDef * 0.03;
+    const soulWorkBonus = buildState.soulWork * 0.06;
+    
+    const passiveHpRatio = totalPassiveHp / 100;
+    const passiveAtkRatio = totalPassiveAtk / 100;
+    const passiveDefRatio = totalPassiveDef / 100;
+
+    // Canonical Formulas with individual Soul bonuses:
+    const finalHp = Math.floor((500 + 5 * lv + baseHp * 0.5 * lv * (1 + ivRatio)) * (1 + rankBonus) * (1 + soulHpBonus) * (1 + passiveHpRatio));
+    const finalAtk = Math.floor((100 + baseAtk * 0.075 * lv * (1 + ivRatio)) * (1 + rankBonus) * (1 + soulAtkBonus) * (1 + passiveAtkRatio));
+    const finalDef = Math.floor((50 + baseDef * 0.075 * lv * (1 + ivRatio)) * (1 + rankBonus) * (1 + soulDefBonus) * (1 + passiveDefRatio));
+
+    // Base level 1 comparison
+    const base1Hp = Math.floor(500 + 5 + baseHp * 0.5);
+    const base1Atk = Math.floor(100 + baseAtk * 0.075);
+    const base1Def = Math.floor(50 + baseDef * 0.075);
+
+    // Min-Max IV range at this level & setup
+    const minHp = Math.floor((500 + 5 * lv + baseHp * 0.5 * lv * 1.0) * (1 + rankBonus) * (1 + soulHpBonus) * (1 + passiveHpRatio));
+    const maxHp = Math.floor((500 + 5 * lv + baseHp * 0.5 * lv * 1.30) * (1 + rankBonus) * (1 + soulHpBonus) * (1 + passiveHpRatio));
+    const minAtk = Math.floor((100 + baseAtk * 0.075 * lv * 1.0) * (1 + rankBonus) * (1 + soulAtkBonus) * (1 + passiveAtkRatio));
+    const maxAtk = Math.floor((100 + baseAtk * 0.075 * lv * 1.30) * (1 + rankBonus) * (1 + soulAtkBonus) * (1 + passiveAtkRatio));
+    const minDef = Math.floor((50 + baseDef * 0.075 * lv * 1.0) * (1 + rankBonus) * (1 + soulDefBonus) * (1 + passiveDefRatio));
+    const maxDef = Math.floor((50 + baseDef * 0.075 * lv * 1.30) * (1 + rankBonus) * (1 + soulDefBonus) * (1 + passiveDefRatio));
+
+    const baseWork = stats.support || 100;
+    const workSpeedFinalNum = Math.round(baseWork * (1 + totalPassiveWork / 100) * (1 + soulWorkBonus));
+    const mount = pal.mount || {};
+    const baseSprint = stats.sprint_speed || (mount.sprint_speed > 0 ? mount.sprint_speed : 600);
+    const sprintSpeedFinal = Math.round(baseSprint * (1 + totalPassiveSpeed / 100));
+
+    // Elements badges
+    let elemsHTML = "";
+    if (pal.elements && pal.elements.length > 0) {
+        elemsHTML = pal.elements.map(el => {
+            const elLower = el.toLowerCase();
+            return `<span class="element-badge elem-${elLower}" style="padding:4px 10px; font-size:0.8rem;">${el}</span>`;
+        }).join(" ");
+    } else {
+        elemsHTML = `<span class="element-badge elem-normal" style="padding:4px 10px; font-size:0.8rem;">Normal</span>`;
+    }
+
+    const summaryCard = document.getElementById("build-summary-card");
+    if (summaryCard) {
+        summaryCard.innerHTML = `
+            <div style="display:flex; align-items:center; gap:16px; border-bottom:1px solid rgba(255,255,255,0.12); padding-bottom:16px; margin-bottom:18px;">
+                <img src="${pal.image_url || 'https://via.placeholder.com/80'}" alt="${pal.name}" style="width:76px; height:76px; border-radius:50%; object-fit:cover; border:2px solid #38bdf8; box-shadow:0 0 15px rgba(56,189,248,0.4);" onerror="this.src='https://via.placeholder.com/80?text=Pal'">
+                <div>
+                    <div style="font-size:0.8rem; color:#94a3b8; font-weight:700; text-transform:uppercase;">#ID ${pal.id || '?'} | Phẩm chất Rank ${stats.rarity || 1}</div>
+                    <h2 style="font-size:1.6rem; color:#fff; font-weight:800; margin:4px 0;">${pal.name}</h2>
+                    <div style="display:flex; gap:6px; margin-top:4px;">${elemsHTML}</div>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-bottom:18px;">
+                <div class="build-stat-box border-t-4 border-t-red-400">
+                    <span class="s-label">❤️ SINH LỰC (HP)</span>
+                    <span class="s-val" style="color:#f87171;">${finalHp.toLocaleString('vi-VN')}</span>
+                    <span class="s-diff" style="color:#94a3b8;">Min-Max IV: ${minHp.toLocaleString('vi-VN')} - ${maxHp.toLocaleString('vi-VN')}</span>
+                </div>
+                <div class="build-stat-box border-t-4 border-t-orange-400">
+                    <span class="s-label">🏹 TẤN CÔNG (ATK)</span>
+                    <span class="s-val" style="color:#fb923c;">${finalAtk.toLocaleString('vi-VN')}</span>
+                    <span class="s-diff" style="color:#94a3b8;">Min-Max IV: ${minAtk.toLocaleString('vi-VN')} - ${maxAtk.toLocaleString('vi-VN')}</span>
+                </div>
+                <div class="build-stat-box border-t-4 border-t-sky-400">
+                    <span class="s-label">🛡️ PHÒNG THỦ (DEF)</span>
+                    <span class="s-val" style="color:#38bdf8;">${finalDef.toLocaleString('vi-VN')}</span>
+                    <span class="s-diff" style="color:#94a3b8;">Min-Max IV: ${minDef.toLocaleString('vi-VN')} - ${maxDef.toLocaleString('vi-VN')}</span>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; margin-bottom:18px; background:rgba(30,41,59,0.5); padding:14px; border-radius:12px; border:1px solid rgba(255,255,255,0.06);">
+                <div>
+                    <span style="font-size:0.8rem; color:#94a3b8; display:block;">🛠️ Tốc độ làm việc tại căn cứ:</span>
+                    <strong style="font-size:1.15rem; color:#60a5fa;">${workSpeedFinalNum}</strong> 
+                    <span style="font-size:0.78rem; color:#cbd5e1;">(Gốc ${baseWork} | Skill ${totalPassiveWork >= 0 ? '+' : ''}${totalPassiveWork}% | Soul ${soulWorkBonus >= 0 ? '+' : ''}${Math.round(soulWorkBonus*100)}%)</span>
+                </div>
+                <div>
+                    <span style="font-size:0.8rem; color:#94a3b8; display:block;">🚀 Tốc độ lướt di chuyển nhanh:</span>
+                    <strong style="font-size:1.15rem; color:#facc15;">${sprintSpeedFinal}</strong> 
+                    <span style="font-size:0.78rem; color:#cbd5e1;">(Gốc ${baseSprint} ${totalPassiveSpeed >= 0 ? '+' : ''}${totalPassiveSpeed}%)</span>
+                </div>
+            </div>
+
+            <div style="background:rgba(15,23,42,0.65); border-left:3px solid #facc15; padding:12px 14px; border-radius:8px; font-size:0.84rem; color:#cbd5e1; line-height:1.5;">
+                <strong style="color:#facc15;"><i class="fa-solid fa-sliders"></i> Tóm tắt Hệ số nhân (Multipliers Breakdown):</strong><br>
+                • Cấp độ: <strong>Lv.${lv}</strong> | Ngưng tụ sao: <strong>+${Math.round(rankBonus*100)}%</strong> (Rank ⭐ ${rankBonus*20})<br>
+                • Tiềm năng IVs: <strong>+${buildState.iv}%</strong> | Linh Hồn Statue: <strong>HP +${Math.round(soulHpBonus*100)}% | ATK +${Math.round(soulAtkBonus*100)}% | DEF +${Math.round(soulDefBonus*100)}% | Work +${Math.round(soulWorkBonus*100)}%</strong><br>
+                • Tổng Buff từ ${buildState.equippedPassives.length} Skill bị động: <strong>ATK ${totalPassiveAtk >= 0 ? '+' : ''}${totalPassiveAtk}% | DEF ${totalPassiveDef >= 0 ? '+' : ''}${totalPassiveDef}% | HP ${totalPassiveHp >= 0 ? '+' : ''}${totalPassiveHp}%</strong>
+            </div>
+        `;
+    }
+}
+
+function saveCurrentBuild() {
+    const pal = allPals.find(p => p.id === buildState.selectedPalId) || allPals[0];
+    if (!pal) return;
+
+    const buildName = prompt("Nhập tên cho Build Pal này (VD: Solenne Dame Khủng, Anubis Chuyên Chạy...):", `${pal.name} Lv.${buildState.level} Build`);
+    if (!buildName) return;
+
+    const savedList = JSON.parse(localStorage.getItem("saved_pal_builds") || "[]");
+    const newBuild = {
+        id: "build_" + Date.now(),
+        name: buildName,
+        palId: pal.id,
+        palName: pal.name,
+        palImg: pal.image_url,
+        level: buildState.level,
+        rank: buildState.rank,
+        iv: buildState.iv,
+        soulHp: buildState.soulHp,
+        soulAtk: buildState.soulAtk,
+        soulDef: buildState.soulDef,
+        soulWork: buildState.soulWork,
+        passives: buildState.equippedPassives.map(p => ({ id: p.id, name: p.name, desc: p.desc_vi || p.desc }))
+    };
+
+    savedList.unshift(newBuild);
+    localStorage.setItem("saved_pal_builds", JSON.stringify(savedList));
+    renderSavedBuilds();
+    alert(`Đã lưu Build "${buildName}" thành công!`);
+}
+
+function renderSavedBuilds() {
+    const container = document.getElementById("saved-builds-list");
+    const countEl = document.getElementById("saved-builds-count");
+    const savedList = JSON.parse(localStorage.getItem("saved_pal_builds") || "[]");
+
+    if (countEl) countEl.textContent = savedList.length;
+    if (!container) return;
+
+    if (savedList.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:25px; color:#64748b; font-style:italic;">
+                <i class="fa-solid fa-folder-open" style="font-size:2rem; margin-bottom:10px; display:block; opacity:0.5;"></i>
+                Chưa có Build nào được lưu. Hãy chỉnh thông số và bấm "Lưu Build này"!
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = savedList.map(item => {
+        const sHp = item.soulHp !== undefined ? item.soulHp : Math.round((item.soul || 0) / 0.03);
+        const sAtk = item.soulAtk !== undefined ? item.soulAtk : Math.round((item.soul || 0) / 0.03);
+        const sDef = item.soulDef !== undefined ? item.soulDef : Math.round((item.soul || 0) / 0.03);
+        const sWork = item.soulWork !== undefined ? item.soulWork : 0;
+        return `
+            <div class="saved-build-card">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <img src="${item.palImg || 'https://via.placeholder.com/48'}" alt="${item.palName}" style="width:46px; height:46px; border-radius:50%; object-fit:cover; border:1px solid #38bdf8;" onerror="this.src='https://via.placeholder.com/48?text=Pal'">
+                    <div>
+                        <strong style="color:#fff; font-size:0.95rem; display:block;">${item.name}</strong>
+                        <span style="font-size:0.78rem; color:#94a3b8;">${item.palName} (Lv.${item.level} | ⭐${item.rank*20} | Soul ${sHp}/${sAtk}/${sDef}/${sWork} | ${item.passives.length} Skill)</span>
+                    </div>
+                </div>
+                <div class="saved-build-actions">
+                    <button class="chip" onclick="loadSavedBuild('${item.id}')" style="padding:6px 12px; font-size:0.78rem; background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#38bdf8; cursor:pointer;" title="Tải Build này">
+                        <i class="fa-solid fa-upload"></i> Tải
+                    </button>
+                    <button class="remove-slot-btn" onclick="deleteSavedBuild('${item.id}')" title="Xóa build này">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+function loadSavedBuild(buildId) {
+    const savedList = JSON.parse(localStorage.getItem("saved_pal_builds") || "[]");
+    const found = savedList.find(b => b.id === buildId);
+    if (!found) return;
+
+    buildState.selectedPalId = found.palId;
+    buildState.level = found.level;
+    buildState.rank = found.rank;
+    buildState.iv = found.iv;
+    buildState.soulHp = found.soulHp !== undefined ? found.soulHp : Math.round((found.soul || 0) / 0.03);
+    buildState.soulAtk = found.soulAtk !== undefined ? found.soulAtk : Math.round((found.soul || 0) / 0.03);
+    buildState.soulDef = found.soulDef !== undefined ? found.soulDef : Math.round((found.soul || 0) / 0.03);
+    buildState.soulWork = found.soulWork !== undefined ? found.soulWork : 0;
+    
+    // Map passives from allPassivesData
+    buildState.equippedPassives = [];
+    if (found.passives && Array.isArray(found.passives)) {
+        found.passives.forEach(p => {
+            const obj = allPassivesData.find(item => item.id === p.id || item.name === p.name);
+            if (obj) buildState.equippedPassives.push(obj);
+        });
+    }
+
+    // Sync UI inputs
+    const palSelect = document.getElementById("build-pal-select");
+    if (palSelect) palSelect.value = buildState.selectedPalId;
+    const levelSlider = document.getElementById("build-level");
+    if (levelSlider) levelSlider.value = buildState.level;
+    if (document.getElementById("build-level-val")) document.getElementById("build-level-val").textContent = buildState.level;
+    const rankSelect = document.getElementById("build-rank");
+    if (rankSelect) rankSelect.value = String(buildState.rank);
+    const ivSlider = document.getElementById("build-iv");
+    if (ivSlider) ivSlider.value = buildState.iv;
+    if (document.getElementById("build-iv-val")) document.getElementById("build-iv-val").textContent = `${buildState.iv}% (IV ${Math.round((buildState.iv/30)*100)})`;
+    
+    const soulHpSlider = document.getElementById("build-soul-hp");
+    if (soulHpSlider) soulHpSlider.value = buildState.soulHp;
+    if (document.getElementById("build-soul-hp-val")) document.getElementById("build-soul-hp-val").textContent = `+${buildState.soulHp * 3}% (Lv.${buildState.soulHp})`;
+
+    const soulAtkSlider = document.getElementById("build-soul-atk");
+    if (soulAtkSlider) soulAtkSlider.value = buildState.soulAtk;
+    if (document.getElementById("build-soul-atk-val")) document.getElementById("build-soul-atk-val").textContent = `+${buildState.soulAtk * 3}% (Lv.${buildState.soulAtk})`;
+
+    const soulDefSlider = document.getElementById("build-soul-def");
+    if (soulDefSlider) soulDefSlider.value = buildState.soulDef;
+    if (document.getElementById("build-soul-def-val")) document.getElementById("build-soul-def-val").textContent = `+${buildState.soulDef * 3}% (Lv.${buildState.soulDef})`;
+
+    const soulWorkSlider = document.getElementById("build-soul-work");
+    if (soulWorkSlider) soulWorkSlider.value = buildState.soulWork;
+    if (document.getElementById("build-soul-work-val")) document.getElementById("build-soul-work-val").textContent = `+${buildState.soulWork * 6}% (Lv.${buildState.soulWork})`;
+
+    updateBuildUI();
+    alert(`Đã tải cấu hình Build "${found.name}"!`);
+}
+
+function deleteSavedBuild(buildId) {
+    let savedList = JSON.parse(localStorage.getItem("saved_pal_builds") || "[]");
+    savedList = savedList.filter(b => b.id !== buildId);
+    localStorage.setItem("saved_pal_builds", JSON.stringify(savedList));
+    renderSavedBuilds();
 }
 
