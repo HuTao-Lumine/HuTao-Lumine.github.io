@@ -574,5 +574,60 @@
     <script src="data/map_spawn_bundle.js"></script>
     <script src="data/passives_bundle.js"></script>
     <script src="app.js"></script>
+
+    <!-- AI Chatbot Widget -->
+    <div id="ai-chatbot-widget">
+        <button id="ai-chatbot-toggle" title="Chat với AI Thủ thư">
+            <i class="fa-solid fa-robot"></i>
+        </button>
+        <div id="ai-chatbot-window" class="hidden glass-panel">
+            <div class="chatbot-header">
+                <div class="chatbot-title">
+                    <i class="fa-solid fa-robot" style="color:#60a5fa;"></i> 
+                    <span>Palworld AI Trợ lý (Cloud API)</span>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button id="chatbot-settings-btn" title="Cài đặt API" style="background: transparent; border: none; color: #94a3b8; font-size: 1rem; cursor: pointer;"><i class="fa-solid fa-gear"></i></button>
+                    <button id="chatbot-export-btn" title="Xuất file Log Chat" style="background: transparent; border: none; color: #94a3b8; font-size: 1rem; cursor: pointer;"><i class="fa-solid fa-download"></i></button>
+                    <button id="chatbot-close-btn" style="background: transparent; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+            
+            <!-- API Settings Container -->
+            <div id="api-settings-container" style="display:none; padding: 15px 20px; background: rgba(15, 23, 42, 0.95); border-bottom: 1px solid rgba(59,130,246,0.3); font-size: 0.9rem;">
+                <div style="margin-bottom: 10px; color: #60a5fa; font-weight: bold;"><i class="fa-brands fa-google"></i> Cấu hình Google Gemini API</div>
+                
+                <div style="margin-bottom: 10px;">
+                    <label style="display:block; color:#cbd5e1; margin-bottom:5px; font-size: 0.8rem;">Gemini Model Name:</label>
+                    <input type="text" id="api-model-input" placeholder="VD: gemini-1.5-flash" style="width:100%; padding:8px; border-radius:4px; border:1px solid #334155; background:#1e293b; color:#fff;" value="gemini-1.5-flash">
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display:block; color:#cbd5e1; margin-bottom:5px; font-size: 0.8rem;">Tải lên File chứa API Keys (.txt / .env):</label>
+                    <input type="file" id="api-key-file-input" accept=".txt,.env" style="width:100%; font-size: 0.8rem; color: #94a3b8; margin-bottom: 5px;">
+                    <div id="api-key-status" style="font-size: 0.75rem; color: #fbbf24;">Chưa tải lên file nào.</div>
+                </div>
+                
+                <div style="text-align: right;">
+                    <button id="api-save-btn" style="background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem;"><i class="fa-solid fa-floppy-disk"></i> Lưu cấu hình</button>
+                </div>
+            </div>
+
+            <div id="chatbot-messages" class="chatbot-messages">
+                <!-- Messages will be injected here by JS -->
+                <div class="chat-message bot-message">
+                    <div class="msg-avatar"><i class="fa-solid fa-robot"></i></div>
+                    <div class="msg-content">Xin chào! Tôi là Trợ lý AI của Palworld Smart Paldex.<br><br>Để bắt đầu, vui lòng nhấp vào biểu tượng ⚙️ (Cài đặt) ở góc trên để cấu hình **Google Gemini API Key** của bạn nhé! Dữ liệu sẽ được lưu an toàn trên trình duyệt của bạn.</div>
+                </div>
+            </div>
+            <div class="chatbot-input-area">
+                <input type="text" id="chatbot-input" placeholder="Nhập câu hỏi của bạn..." autocomplete="off">
+                <button id="chatbot-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Chatbot Logic -->
+    <script src="chatbot.js?v=5"></script>
 </body>
 </html>
