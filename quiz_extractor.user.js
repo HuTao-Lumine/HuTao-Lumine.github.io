@@ -124,7 +124,7 @@
     settingsOverlay.style.zIndex = '2147483647';
     settingsOverlay.style.fontFamily = 'sans-serif';
     settingsOverlay.innerHTML = `
-        <div id="ai-settings-dialog" style="background: #ffffff; color: #212529; width: 460px; max-width: calc(100vw - 32px); max-height: calc(100vh - 48px); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden;">
+        <div id="ai-settings-dialog" style="background: #ffffff; color: #212529; width: 490px; max-width: calc(100vw - 32px); max-height: calc(100vh - 48px); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden;">
             <div style="padding: 14px 18px; border-bottom: 1px solid #e9ecef; display: flex; align-items: center; justify-content: space-between;">
                 <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #212529;">Cài đặt AI (Gemini)</h3>
                 <button id="close-ai-settings-btn" type="button" style="background: none; border: none; font-size: 18px; line-height: 1; cursor: pointer; color: #6c757d; padding: 4px;">✕</button>
@@ -147,7 +147,7 @@
                 <div id="ai-settings-msg" style="font-size: 12px; text-align: center; display: none; padding: 8px 10px; border-radius: 6px; margin-bottom: 6px;"></div>
             </div>
             <div style="padding: 12px 18px; border-top: 1px solid #e9ecef; background: #f8f9fa; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                <button id="check-keys-btn" type="button" style="padding: 8px 14px; background-color: #e7f1ff; color: #0056D2; border: 1px solid #b6d4fe; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;">Kiểm tra Key</button>
+                <button id="check-keys-btn" type="button" style="padding: 8px 14px; background-color: #e7f1ff; color: #0056D2; border: 1px solid #b6d4fe; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;">Kiểm tra tất cả</button>
                 <div style="display: flex; gap: 8px;">
                     <button id="cancel-ai-settings-btn" type="button" style="padding: 8px 14px; background-color: #fff; color: #495057; border: 1px solid #ced4da; border-radius: 6px; cursor: pointer; font-size: 13px;">Đóng</button>
                     <button id="save-ai-settings" type="button" style="padding: 8px 18px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;">Lưu và đóng</button>
@@ -295,6 +295,41 @@
         statusBadge.style.color = '#6c757d';
         statusBadge.innerText = 'Chưa KT';
 
+        const testBtn = document.createElement('button');
+        testBtn.type = 'button';
+        testBtn.className = 'gemini-key-test-btn';
+        testBtn.title = 'Kiểm tra API Key này';
+        testBtn.innerText = 'Kiểm tra';
+        testBtn.style.padding = '5px 8px';
+        testBtn.style.background = '#e7f1ff';
+        testBtn.style.color = '#0056D2';
+        testBtn.style.border = '1px solid #b6d4fe';
+        testBtn.style.borderRadius = '5px';
+        testBtn.style.cursor = 'pointer';
+        testBtn.style.fontSize = '12px';
+        testBtn.style.fontWeight = '600';
+        testBtn.style.whiteSpace = 'nowrap';
+        testBtn.addEventListener('click', async () => {
+            const val = input.value.trim();
+            if (!val) {
+                showSettingsMessage('Vui lòng nhập API Key ở ô này trước khi kiểm tra.', 'warning');
+                input.focus();
+                return;
+            }
+            testBtn.disabled = true;
+            setRowStatus(row, 'checking');
+            try {
+                await verifyApiKeyWorks(val);
+                setRowStatus(row, 'valid', 'API Key hoạt động tốt');
+                showSettingsMessage('API Key hoạt động tốt!', 'success');
+            } catch (err) {
+                setRowStatus(row, 'invalid', err.message);
+                showSettingsMessage(`API Key lỗi: ${err.message}`, 'error');
+            } finally {
+                testBtn.disabled = false;
+            }
+        });
+
         const toggleVisBtn = document.createElement('button');
         toggleVisBtn.type = 'button';
         toggleVisBtn.title = 'Hiện/Ẩn API Key';
@@ -338,6 +373,7 @@
 
         row.appendChild(input);
         row.appendChild(statusBadge);
+        row.appendChild(testBtn);
         row.appendChild(toggleVisBtn);
         row.appendChild(removeBtn);
         apiKeysListEl.appendChild(row);
