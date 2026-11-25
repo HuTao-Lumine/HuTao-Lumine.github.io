@@ -137,11 +137,11 @@
                 <div id="api-keys-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 210px; overflow-y: auto; margin-bottom: 14px; padding-right: 2px;"></div>
 
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                    <label style="font-size: 13px; font-weight: 600; color: #343a40;">Model khả dụng (có quota):</label>
+                    <label style="font-size: 13px; font-weight: 600; color: #343a40;">Model khả dụng:</label>
                     <button id="fetch-models-btn" type="button" style="padding: 4px 10px; background-color: #f1f3f5; color: #212529; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;">↻ Lấy danh sách Model</button>
                 </div>
                 <select id="gemini-model-select" style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #ced4da; border-radius: 6px; font-size: 13px; background-color: #fff; color: #212529; margin-bottom: 14px;">
-                    <option value="">-- Bấm "Lấy danh sách Model" để tải model có quota --</option>
+                    <option value="">-- Bấm "Lấy danh sách Model" để tải danh sách model --</option>
                 </select>
 
                 <div id="ai-settings-msg" style="font-size: 12px; text-align: center; display: none; padding: 8px 10px; border-radius: 6px; margin-bottom: 6px;"></div>
@@ -239,7 +239,7 @@
         }
     });
 
-    // --- Logic Dialog Quản lý API Key, Kiểm tra Key & Lọc Model có Quota ---
+    // --- Logic Dialog Quản lý API Key, Kiểm tra Key & Tải danh sách Model ---
     const apiKeysListEl = document.getElementById('api-keys-list');
     const modelSelectEl = document.getElementById('gemini-model-select');
     const settingsMsgEl = document.getElementById('ai-settings-msg');
@@ -400,7 +400,7 @@
         if (!Array.isArray(models) || models.length === 0) {
             const opt = document.createElement('option');
             opt.value = '';
-            opt.innerText = '-- Bấm "Lấy danh sách Model" để tải model có quota --';
+            opt.innerText = '-- Bấm "Lấy danh sách Model" để tải danh sách model --';
             modelSelectEl.appendChild(opt);
             return;
         }
@@ -500,113 +500,16 @@
         });
     }
 
-    // Kiểm tra thực tế xem model có được cấp quota (> 0) cho API Key này không (loại bỏ các model 0/0 như Genie 4, Gemini 4 Neon...)
-    function checkModelHasQuota(apiKey, modelId) {
-        return new Promise((resolve) => {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${encodeURIComponent(apiKey)}`;
-            const body = JSON.stringify({
-                contents: [{ parts: [{ text: '1' }] }],
-                generationConfig: { maxOutputTokens: 1 }
-            });
-
-            GM_xmlhttpRequest({
-                method: 'POST',
-                url: url,
-                headers: { 'Content-Type': 'application/json' },
-                data: body,
-                onload: (res) => {
-                    if (res.status >= 200 && res.status < 300) {
-                        resolve(true);
-                        return;
-                    }
-
-                    if (res.status === 429) {
-                        try {
-                            const errJson = JSON.parse(res.responseText);
-                            const msg = String(errJson?.error?.message || '');
-                            const details = Array.isArray(errJson?.error?.details) ? errJson.error.details : [];
-
-                            let foundZeroLimit = /limit:\s*0\b/i.test(msg);
-                            let foundPositiveLimit = /limit:\s*([1-9]\d*)/i.test(msg);
-
-                            details.forEach(d => {
-                                if (Array.isArray(d.violations)) {
-                                    d.violations.forEach(v => {
-                                        if (v.quotaValue !== undefined) {
-                                            const val = Number(v.quotaValue);
-                                            if (val === 0) foundZeroLimit = true;
-                                            if (val > 0) foundPositiveLimit = true;
-                                        }
-                                    });
-                                }
-                            });
-
-                            if (foundZeroLimit) {
-                                resolve(false);
-                                return;
-                            }
-                            if (foundPositiveLimit) {
-                                resolve(true);
-                                return;
-                            }
-                        } catch (_) {}
-                        resolve(false);
-                        return;
-                    }
-
-                    resolve(false);
-                },
-                onerror: () => resolve(false)
-            });
-        });
-    }
-
-    async function fetchQuotaModelsFromKeys(keys, onProgress) {
-        let workingKey = null;
-        let candidates = null;
+    async function fetchModelsFromKeys(keys) {
         let lastErr = null;
-
         for (const key of keys) {
             try {
-                candidates = await fetchCandidateModels(key);
-                workingKey = key;
-                break;
+                return await fetchCandidateModels(key);
             } catch (err) {
                 lastErr = err;
             }
         }
-
-        if (!workingKey || !candidates) {
-            throw lastErr || new Error('Không tìm thấy API Key hợp lệ để tải danh sách model.');
-        }
-
-        const quotaModels = [];
-        const total = candidates.length;
-        let completed = 0;
-        const concurrency = 4;
-
-        for (let i = 0; i < total; i += concurrency) {
-            const batch = candidates.slice(i, i + concurrency);
-            const batchResults = await Promise.all(
-                batch.map(async (m) => {
-                    const ok = await checkModelHasQuota(workingKey, m.id);
-                    completed++;
-                    if (typeof onProgress === 'function') {
-                        onProgress(completed, total);
-                    }
-                    return ok ? m : null;
-                })
-            );
-            batchResults.forEach(item => {
-                if (item) quotaModels.push(item);
-            });
-        }
-
-        return {
-            quotaModels,
-            totalCandidates: total,
-            filteredOutCount: total - quotaModels.length
-        };
+        throw lastErr || new Error('Không tìm thấy API Key hợp lệ để tải danh sách model.');
     }
 
     function openSettingsDialog() {
@@ -683,7 +586,7 @@
         checkKeysBtn.disabled = false;
     });
 
-    // 2. Nút "Lấy danh sách Model": tải và lọc chỉ hiển thị các model thực sự có quota (> 0) cho API Key
+    // 2. Nút "Lấy danh sách Model": tải danh sách model khả dụng từ /v1beta/models
     fetchModelsBtn.addEventListener('click', async () => {
         const dialogKeys = getDialogKeyRows().map(r => r.key);
         const keysToUse = dialogKeys.length > 0 ? dialogKeys : getSavedApiKeys();
@@ -694,25 +597,19 @@
         }
 
         const origText = fetchModelsBtn.innerText;
-        fetchModelsBtn.innerText = 'Đang dò quota...';
+        fetchModelsBtn.innerText = 'Đang tải...';
         fetchModelsBtn.disabled = true;
-        showSettingsMessage('Đang tải danh sách model và kiểm tra quota khả dụng...', 'info');
+        showSettingsMessage('Đang tải danh sách model...', 'info');
 
         try {
-            const { quotaModels, filteredOutCount } = await fetchQuotaModelsFromKeys(keysToUse, (done, total) => {
-                showSettingsMessage(`Đang kiểm tra quota từng model (${done}/${total})...`, 'info');
-            });
+            const models = await fetchModelsFromKeys(keysToUse);
+            GM_setValue('geminiCachedModels', models);
+            populateModelSelect(models, modelSelectEl.value || getSavedModel());
 
-            GM_setValue('geminiCachedModels', quotaModels);
-            populateModelSelect(quotaModels, modelSelectEl.value || getSavedModel());
-
-            if (quotaModels.length > 0) {
-                showSettingsMessage(
-                    `Đã tìm thấy ${quotaModels.length} model có quota khả dụng (đã ẩn ${filteredOutCount} model 0/0).`,
-                    'success'
-                );
+            if (models.length > 0) {
+                showSettingsMessage(`Đã tải ${models.length} model khả dụng.`, 'success');
             } else {
-                showSettingsMessage('Không tìm thấy model nào có quota khả dụng cho API Key này.', 'error');
+                showSettingsMessage('Không tìm thấy model khả dụng nào.', 'error');
             }
         } catch (err) {
             showSettingsMessage(`Lỗi khi lấy danh sách model: ${err.message}`, 'error');
