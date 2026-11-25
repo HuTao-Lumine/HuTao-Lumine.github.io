@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Quiz Extractor
 // @namespace    http://tampermonkey.net/
-// @version      1.2.1
+// @version      1.3.0
 // @description  Tự động giải và điền đáp án bài kiểm tra bằng AI.
 // @author       You
 // @match        *://*.coursera.org/*
