@@ -707,6 +707,35 @@
         return text;
     }
 
+    const TEXT_BLOCK_SELECTOR = '[data-testid="text-block-form-part"], [data-partindex].textBlock, .rc-FormParts .textBlock';
+
+    async function getCleanTextBlockContent(blockEl) {
+        const collapsedBtns = blockEl.querySelectorAll('button.cds-AccordionHeader-button[aria-expanded="false"], button[aria-expanded="false"][aria-controls]');
+        if (collapsedBtns.length > 0) {
+            collapsedBtns.forEach(b => b.click());
+            await sleep(150);
+        }
+
+        const hiddenTargets = blockEl.querySelectorAll('[data-testid="acknowledgment-checkpoint"], [data-assessment-checkpoint], .rc-A11yScreenReaderOnly, [data-testid="visually-hidden"]');
+        const prevDisplays = [];
+        hiddenTargets.forEach((el, i) => {
+            prevDisplays[i] = el.style.display;
+            el.style.display = 'none';
+        });
+
+        let text = (blockEl.innerText || '').trim();
+        if (!text) {
+            const clone = blockEl.cloneNode(true);
+            clone.querySelectorAll('[data-testid="acknowledgment-checkpoint"], [data-assessment-checkpoint], .rc-A11yScreenReaderOnly, [data-testid="visually-hidden"]').forEach(el => el.remove());
+            text = (clone.textContent || '').trim();
+        }
+
+        hiddenTargets.forEach((el, i) => {
+            el.style.display = prevDisplays[i];
+        });
+        return text;
+    }
+
     function getOptionElements(container) {
         const rcOptions = container.querySelectorAll('.rc-Option');
         if (rcOptions.length > 0) return rcOptions;
@@ -1119,14 +1148,63 @@
 
         try {
             const quizTitle = document.querySelector('[data-testid="header-left"] h1, [data-testid="cover-page-header-assignment-type"] + h1')?.innerText?.trim() || '';
+            const quizRoot = questionContainers[0].closest('[data-testid="tunnel-vision-content"], [data-testid="course-frame-content"]') || document;
+            const allFormParts = Array.from(
+                quizRoot.querySelectorAll(`${TEXT_BLOCK_SELECTOR}, [data-testid^="part-Submission_"]`)
+            ).filter(el => {
+                if (el.matches('[data-testid^="part-Submission_"]')) return true;
+                return !el.closest('[data-testid^="part-Submission_"]') &&
+                    !el.parentElement?.closest(TEXT_BLOCK_SELECTOR);
+            });
+
             const imageCache = new Map();
             const imagesPayload = [];
             let imageCounter = 0;
+            let questionCounter = 0;
+            let contextCounter = 0;
+            let contextBlocks = [];
             let questionsData = [];
 
-            for (let index = 0; index < questionContainers.length; index++) {
-                const container = questionContainers[index];
-                const questionId = index + 1;
+            for (const partEl of allFormParts) {
+                if (!partEl.matches('[data-testid^="part-Submission_"]')) {
+                    const blockText = await getCleanTextBlockContent(partEl);
+                    const blockImgs = Array.from(partEl.querySelectorAll('img')).filter(img =>
+                        !img.closest('[data-testid="acknowledgment-checkpoint"], [data-assessment-checkpoint], [aria-hidden="true"]')
+                    );
+                    const blockImageRefs = [];
+                    const pendingImgs = [];
+
+                    for (const img of blockImgs) {
+                        const inlineData = await captureImageElement(img, imageCache);
+                        if (inlineData) {
+                            const imgRef = `IMAGE_${++imageCounter}`;
+                            blockImageRefs.push(imgRef);
+                            pendingImgs.push({ ref: imgRef, inlineData });
+                        }
+                    }
+
+                    if (blockText || blockImageRefs.length > 0) {
+                        const blockIndex = ++contextCounter;
+                        pendingImgs.forEach(item => {
+                            imagesPayload.push({
+                                ref: item.ref,
+                                questionId: null,
+                                context: `phần thông tin/ngữ cảnh #${blockIndex}`,
+                                inlineData: item.inlineData
+                            });
+                        });
+                        contextBlocks.push({
+                            index: blockIndex,
+                            beforeQuestionId: questionCounter + 1,
+                            text: blockText,
+                            imageRefs: blockImageRefs
+                        });
+                    }
+                    continue;
+                }
+
+                const container = partEl;
+                const questionId = ++questionCounter;
                 const questionText = getCleanQuestionText(container);
                 const options = getOptionElements(container);
                 let optionsData = [];
@@ -1209,7 +1287,7 @@
             }
 
             // Tự động xoay vòng / chuyển sang API Key tiếp theo nếu key hiện tại hết quota (429) hoặc gặp lỗi
-            const aiAnswersMap = await getAiAnswersWithFallback(apiKeys, modelName, questionsData, imagesPayload, quizTitle, (attemptIdx, total) => {
+            const aiAnswersMap = await getAiAnswersWithFallback(apiKeys, modelName, questionsData, imagesPayload, quizTitle, contextBlocks, (attemptIdx, total) => {
                 btn.innerText = `Thử Key ${attemptIdx}/${total}...`;
             });
             
@@ -1256,7 +1334,7 @@
         }
     });
 
-    async function getAiAnswersWithFallback(apiKeys, modelName, questionsData, imagesPayload, quizTitle, onRetry) {
+    async function getAiAnswersWithFallback(apiKeys, modelName, questionsData, imagesPayload, quizTitle, contextBlocks, onRetry) {
         let lastError = null;
         const total = apiKeys.length;
         if (activeKeyIndex >= total) activeKeyIndex = 0;
@@ -1268,7 +1346,7 @@
                 onRetry(attempt + 1, total);
             }
             try {
-                const answers = await getAiAnswers(key, modelName, questionsData, imagesPayload, quizTitle);
+                const answers = await getAiAnswers(key, modelName, questionsData, imagesPayload, quizTitle, contextBlocks);
                 activeKeyIndex = idx; // Ghi nhớ key đang hoạt động tốt cho lần gọi sau
                 return answers;
             } catch (err) {
@@ -1280,7 +1358,7 @@
     }
 
     // 3. Hàm gọi AI (Gemini API - hỗ trợ cả văn bản và hình ảnh multimodal)
-    function getAiAnswers(apiKey, modelName, questionsData, imagesPayload = [], quizTitle = '') {
+    function getAiAnswers(apiKey, modelName, questionsData, imagesPayload = [], quizTitle = '', contextBlocks = []) {
         return new Promise((resolve, reject) => {
             const promptData = questionsData.map(q => {
                 const item = {
@@ -1302,8 +1380,22 @@
             });
 
             const imageNote = imagesPayload.length > 0
-                ? '\n- Một số câu hỏi hoặc lựa chọn có đính kèm hình ảnh (được tham chiếu qua "image_refs" hoặc nhãn "[IMAGE_x]"). Hãy quan sát kỹ nội dung từng hình ảnh tương ứng được đính kèm bên dưới trước khi chọn/viết đáp án.'
+                ? '\n- Một số phần ngữ cảnh, câu hỏi hoặc lựa chọn có đính kèm hình ảnh (được tham chiếu qua "image_refs" hoặc nhãn "[IMAGE_x]"). Hãy quan sát kỹ nội dung từng hình ảnh tương ứng được đính kèm bên dưới trước khi chọn/viết đáp án.'
                 : '';
+
+            let contextSection = '';
+            if (Array.isArray(contextBlocks) && contextBlocks.length > 0) {
+                const formattedBlocks = contextBlocks.map(b => {
+                    const posLabel = b.beforeQuestionId <= questionsData.length
+                        ? `(Áp dụng từ câu hỏi id=${b.beforeQuestionId} trở đi)`
+                        : '(Thông tin bổ sung)';
+                    const imgSuffix = b.imageRefs && b.imageRefs.length > 0
+                        ? `\nHình đính kèm: [${b.imageRefs.join(', ')}]`
+                        : '';
+                    return `[Ngữ cảnh #${b.index} ${posLabel}]\n${b.text}${imgSuffix}`;
+                }).join('\n\n');
+                contextSection = `\nThông tin / Kịch bản / Đoạn văn ngữ cảnh của bài kiểm tra (hãy đọc kỹ để trả lời các câu hỏi liên quan):\n"""\n${formattedBlocks}\n"""\n`;
+            }
 
             const prompt = `Bạn là một chuyên gia giải bài tập${quizTitle ? ` cho bài "${quizTitle}"` : ''}. Dưới đây là danh sách các câu hỏi trong bài kiểm tra.
 Hãy trả lời đúng định dạng JSON. Mảng JSON phải chứa các object có cấu trúc:
@@ -1317,14 +1409,15 @@ Quy tắc bắt buộc theo từng loại câu hỏi ("type"):
 - "single_choice": Chọn ĐÚNG 1 đáp án đúng nhất. "correct_options" phải chứa CHÍNH XÁC nguyên văn chuỗi của lựa chọn đúng trong "options".
 - "multiple_choice": Chọn tất cả các đáp án đúng (có thể nhiều hơn 1). "correct_options" phải chứa CHÍNH XÁC nguyên văn chuỗi của các lựa chọn đúng trong "options".
 - "text": Câu hỏi tự luận, bài viết (essay), phản hồi ngắn hoặc điền từ/số. Hãy tự viết câu trả lời trực tiếp, tự nhiên, đúng trọng tâm, tuân thủ yêu cầu độ dài/cấu trúc trong đề bài (ví dụ: 1-2 câu, từ/số ngắn gọn, hoặc chia nhiều đoạn văn cách nhau bằng ký tự xuống dòng "\\n\\n" nếu đề yêu cầu viết nhiều đoạn/essay), dùng ĐÚNG ngôn ngữ của câu hỏi (ví dụ câu hỏi tiếng Anh thì trả lời bằng tiếng Anh), tuyệt đối không dùng ký hiệu markdown như **, #, \`\`\`, và đặt vào mảng "correct_options" (nếu có "input_count" > 1 thì trả về đủ số phần tử tương ứng với từng ô nhập).${imageNote}
-
+${contextSection}
 Dữ liệu câu hỏi:
 ${JSON.stringify(promptData, null, 2)}`;
 
             const contentParts = [{ text: prompt }];
             imagesPayload.forEach(img => {
+                const ownerLabel = img.questionId ? `thuộc câu hỏi id=${img.questionId}, ${img.context}` : `thuộc ${img.context}`;
                 contentParts.push({
-                    text: `\nHình ảnh [${img.ref}] (thuộc câu hỏi id=${img.questionId}, ${img.context}):`
+                    text: `\nHình ảnh [${img.ref}] (${ownerLabel}):`
                 });
                 contentParts.push({
                     inline_data: img.inlineData
