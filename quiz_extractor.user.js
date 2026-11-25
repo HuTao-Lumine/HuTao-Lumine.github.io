@@ -8,11 +8,15 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
+// @grant        unsafeWindow
 // @connect      generativelanguage.googleapis.com
 // ==/UserScript==
 
 (function() {
     'use strict';
+
+    const pageWin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     // 1. UI Khung chính
     const mainUI = document.createElement('div');
@@ -182,6 +186,290 @@
         setTimeout(() => msg.style.display = 'none', 2000);
     });
 
+    // --- Các hàm trích xuất câu hỏi, hình ảnh và điền đáp án (hỗ trợ cả <textarea>, <input> và Slate RichTextEditor) ---
+    const TEXT_INPUT_SELECTOR = [
+        'textarea:not([readonly]):not([aria-hidden="true"]):not([disabled])',
+        'input[type="text"]:not([readonly]):not([aria-hidden="true"]):not([disabled])',
+        'input[type="number"]:not([readonly]):not([aria-hidden="true"]):not([disabled])',
+        '[data-slate-editor="true"][contenteditable="true"]',
+        '[role="textbox"][contenteditable="true"]:not([aria-hidden="true"])'
+    ].join(', ');
+
+    function getCleanQuestionText(container) {
+        const promptNode = container.querySelector('[id^="prompt-"], [data-testid="legend"] [data-testid="cml-viewer"], [data-testid="legend"] .rc-CML');
+        if (!promptNode) return 'Không tìm thấy nội dung câu hỏi';
+
+        const checkpoints = promptNode.querySelectorAll('[data-testid="acknowledgment-checkpoint"], [data-assessment-checkpoint]');
+        const prevDisplays = [];
+        checkpoints.forEach((el, i) => {
+            prevDisplays[i] = el.style.display;
+            el.style.display = 'none';
+        });
+
+        const text = promptNode.innerText.trim();
+
+        checkpoints.forEach((el, i) => {
+            el.style.display = prevDisplays[i];
+        });
+        return text;
+    }
+
+    function getOptionElements(container) {
+        const rcOptions = container.querySelectorAll('.rc-Option');
+        if (rcOptions.length > 0) return rcOptions;
+        return container.querySelectorAll('label.cds-checkboxAndRadio-label');
+    }
+
+    function getOptionText(option) {
+        const optionTextNode = option.querySelector('.cds-checkboxAndRadio-labelText, .rc-CML, [data-testid="cml-viewer"]');
+        return optionTextNode ? optionTextNode.innerText.trim() : option.innerText.trim();
+    }
+
+    // Gán giá trị cho <textarea> / <input> controlled bởi React
+    function setReactInputValue(element, value) {
+        const previousValue = element.value;
+        const proto = element.tagName === 'TEXTAREA'
+            ? (pageWin.HTMLTextAreaElement || window.HTMLTextAreaElement).prototype
+            : (pageWin.HTMLInputElement || window.HTMLInputElement).prototype;
+        const nativeValueSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set
+            || Object.getOwnPropertyDescriptor(
+                element.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
+                'value'
+            )?.set;
+
+        if (nativeValueSetter) {
+            nativeValueSetter.call(element, value);
+        } else {
+            element.value = value;
+        }
+
+        if (element._valueTracker) {
+            element._valueTracker.setValue(previousValue === value ? '' : previousValue);
+        }
+
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // --- Hỗ trợ điền văn bản cho Slate.js / Rich Text Editor (part-Submission_RichTextQuestion) ---
+    function isSlateEditorObject(obj) {
+        return Boolean(
+            obj &&
+            typeof obj === 'object' &&
+            Array.isArray(obj.children) &&
+            typeof obj.apply === 'function' &&
+            typeof obj.insertText === 'function' &&
+            typeof obj.insertBreak === 'function'
+        );
+    }
+
+    function findSlateEditor(editorEl) {
+        try {
+            const keys = Object.keys(editorEl);
+            const fiberKey = keys.find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+            if (!fiberKey) return null;
+
+            let curr = editorEl[fiberKey];
+            for (let depth = 0; curr && depth < 35; depth++, curr = curr.return) {
+                const props = curr.memoizedProps;
+                if (props) {
+                    if (isSlateEditorObject(props.editor)) return props.editor;
+                    if (isSlateEditorObject(props.value)) return props.value;
+                    if (props.value && isSlateEditorObject(props.value.editor)) return props.value.editor;
+                    if (Array.isArray(props.value) && isSlateEditorObject(props.value[0])) return props.value[0];
+                }
+                let hook = curr.memoizedState;
+                let steps = 0;
+                while (hook && steps < 25) {
+                    const ms = hook.memoizedState;
+                    if (isSlateEditorObject(ms)) return ms;
+                    if (ms && isSlateEditorObject(ms.current)) return ms.current;
+                    hook = hook.next;
+                    steps++;
+                }
+            }
+        } catch (_) {}
+        return null;
+    }
+
+    function getFirstLeafPoint(nodes, path = []) {
+        const first = nodes && nodes[0];
+        if (!first) return { path: [0, 0], offset: 0 };
+        if (typeof first.text === 'string') return { path: [...path, 0], offset: 0 };
+        return getFirstLeafPoint(first.children || [], [...path, 0]);
+    }
+
+    function getLastLeafPoint(nodes, path = []) {
+        if (!nodes || nodes.length === 0) return { path: [0, 0], offset: 0 };
+        const idx = nodes.length - 1;
+        const last = nodes[idx];
+        if (typeof last.text === 'string') return { path: [...path, idx], offset: last.text.length };
+        return getLastLeafPoint(last.children || [], [...path, idx]);
+    }
+
+    function hasRichEditorContent(editorEl) {
+        if (editorEl.hasAttribute('data-slate-editor')) {
+            const strNodes = editorEl.querySelectorAll('[data-slate-string="true"]');
+            return Array.from(strNodes).some(n => n.textContent.trim().length > 0);
+        }
+        return editorEl.innerText.trim().length > 0;
+    }
+
+    function selectRichEditorRange(editorEl) {
+        const sel = pageWin.getSelection ? pageWin.getSelection() : window.getSelection();
+        const doc = pageWin.document || document;
+        if (!sel) return false;
+
+        const stringNodes = editorEl.querySelectorAll('[data-slate-string="true"]');
+        const range = doc.createRange();
+
+        if (stringNodes.length > 0) {
+            const firstText = stringNodes[0].firstChild || stringNodes[0];
+            const lastNode = stringNodes[stringNodes.length - 1];
+            const lastText = lastNode.firstChild || lastNode;
+            const endOffset = lastText.nodeType === 3 ? lastText.textContent.length : 0;
+            range.setStart(firstText, 0);
+            range.setEnd(lastText, endOffset);
+        } else {
+            const zw = editorEl.querySelector('[data-slate-zero-width]') || editorEl;
+            const target = zw.firstChild || zw;
+            range.setStart(target, 0);
+            range.collapse(true);
+        }
+
+        sel.removeAllRanges();
+        sel.addRange(range);
+        doc.dispatchEvent(new Event('selectionchange'));
+        return stringNodes.length > 0;
+    }
+
+    async function setRichTextEditorValue(editorEl, value) {
+        const normalizedText = String(value).replace(/\r\n/g, '\n').trim();
+        if (!normalizedText) return;
+
+        // Cách 1: Thao tác trực tiếp trên Slate Editor instance thông qua React Fiber (ổn định tuyệt đối, hỗ trợ nhiều đoạn văn)
+        const slateEditor = findSlateEditor(editorEl);
+        if (slateEditor) {
+            try {
+                const start = getFirstLeafPoint(slateEditor.children);
+                const end = getLastLeafPoint(slateEditor.children);
+                slateEditor.apply({
+                    type: 'set_selection',
+                    properties: slateEditor.selection,
+                    newProperties: { anchor: start, focus: end }
+                });
+                if (start.path.join(',') !== end.path.join(',') || start.offset !== end.offset) {
+                    if (typeof slateEditor.deleteFragment === 'function') {
+                        slateEditor.deleteFragment();
+                    }
+                }
+
+                const lines = normalizedText.split('\n');
+                lines.forEach((line, idx) => {
+                    if (idx > 0) {
+                        slateEditor.insertBreak();
+                    }
+                    if (line.length > 0) {
+                        slateEditor.insertText(line);
+                    }
+                });
+
+                await sleep(50);
+                if (hasRichEditorContent(editorEl)) {
+                    editorEl.dispatchEvent(new Event('blur', { bubbles: true }));
+                    return;
+                }
+            } catch (e) {
+                console.warn('Slate Fiber insert lỗi, chuyển sang cơ chế sự kiện DOM:', e);
+            }
+        }
+
+        // Cách 2: Focus + đợi Slate onFocus ổn định, xóa nội dung cũ (nếu có), rồi gửi sự kiện Paste chuẩn
+        editorEl.focus();
+        await sleep(50);
+        const hadExisting = selectRichEditorRange(editorEl);
+        await sleep(150);
+        if (hadExisting) {
+            const IE = pageWin.InputEvent || InputEvent;
+            editorEl.dispatchEvent(new IE('beforeinput', {
+                bubbles: true,
+                cancelable: true,
+                inputType: 'deleteContentBackward'
+            }));
+            await sleep(60);
+            selectRichEditorRange(editorEl);
+            await sleep(120);
+        }
+
+        try {
+            const DT = pageWin.DataTransfer || DataTransfer;
+            const CE = pageWin.ClipboardEvent || ClipboardEvent;
+            const dt = new DT();
+            dt.setData('text/plain', normalizedText);
+
+            const pasteEvt = new CE('paste', {
+                bubbles: true,
+                cancelable: true,
+                clipboardData: dt
+            });
+            editorEl.dispatchEvent(pasteEvt);
+            await sleep(60);
+
+            if (hasRichEditorContent(editorEl)) {
+                editorEl.dispatchEvent(new Event('blur', { bubbles: true }));
+                return;
+            }
+
+            // Dự phòng 2a: InputEvent beforeinput (insertFromPaste)
+            const IE = pageWin.InputEvent || InputEvent;
+            const beforeInputEvt = new IE('beforeinput', {
+                bubbles: true,
+                cancelable: true,
+                inputType: 'insertFromPaste',
+                dataTransfer: dt
+            });
+            editorEl.dispatchEvent(beforeInputEvt);
+            await sleep(60);
+
+            if (hasRichEditorContent(editorEl)) {
+                editorEl.dispatchEvent(new Event('blur', { bubbles: true }));
+                return;
+            }
+        } catch (_) {}
+
+        // Dự phòng 2b: Dùng execCommand('insertText') kích hoạt native Blink beforeinput theo từng dòng
+        editorEl.focus();
+        selectRichEditorRange(editorEl);
+        await sleep(80);
+        if (hadExisting) {
+            document.execCommand('delete', false, null);
+        }
+        const lines = normalizedText.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            if (i > 0) {
+                const IE = pageWin.InputEvent || InputEvent;
+                const brk = new IE('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertParagraph' });
+                const handled = !editorEl.dispatchEvent(brk);
+                if (!handled) {
+                    document.execCommand('insertParagraph', false, null);
+                }
+            }
+            if (lines[i].length > 0) {
+                document.execCommand('insertText', false, lines[i]);
+            }
+        }
+        await sleep(40);
+        editorEl.dispatchEvent(new Event('blur', { bubbles: true }));
+    }
+
+    async function setFieldAnswer(element, value) {
+        if (element.getAttribute('contenteditable') === 'true' || element.isContentEditable) {
+            await setRichTextEditorValue(element, value);
+        } else {
+            setReactInputValue(element, value);
+        }
+    }
+
     // 2. Logic chính khi ấn trả lời
     const btn = document.getElementById('auto-answer-btn');
     btn.addEventListener('click', async () => {
@@ -200,110 +488,121 @@
         }
 
         const btnOriginalText = btn.innerText;
-        let questionsData = [];
-
-        // Thu thập dữ liệu từ trang
-        questionContainers.forEach((container, index) => {
-            const promptNode = container.querySelector('[id^="prompt-"]');
-            const questionText = promptNode ? promptNode.innerText.trim() : 'Không tìm thấy nội dung câu hỏi';
-            
-            const options = container.querySelectorAll('.rc-Option');
-            let optionsData = [];
-
-            if (options.length > 0) {
-                options.forEach((option) => {
-                    const optionTextNode = option.querySelector('.cds-checkboxAndRadio-labelText, .rc-CML');
-                    const text = optionTextNode ? optionTextNode.innerText.trim() : option.innerText.trim();
-                    optionsData.push(text);
-                });
-            } else {
-                const textInputs = container.querySelectorAll('input[type="text"], textarea');
-                textInputs.forEach(input => {
-                    optionsData.push('Text Input');
-                });
-            }
-
-            questionsData.push({
-                id: index + 1,
-                question: questionText,
-                options: optionsData,
-                container: container
-            });
-        });
-
         btn.innerText = 'Đang nhờ AI giải...';
         btn.style.backgroundColor = '#f39c12';
         btn.disabled = true;
 
         try {
-            const aiAnswersMap = await getAiAnswers(apiKey, modelName, questionsData);
+            const quizTitle = document.querySelector('[data-testid="header-left"] h1, [data-testid="cover-page-header-assignment-type"] + h1')?.innerText?.trim() || '';
+            let questionsData = [];
+
+            for (let index = 0; index < questionContainers.length; index++) {
+                const container = questionContainers[index];
+                const questionId = index + 1;
+                const questionText = getCleanQuestionText(container);
+                const options = getOptionElements(container);
+                let optionsData = [];
+                let optionItems = [];
+                let questionType = 'single_choice';
+                let inputCount = 0;
+
+                if (options.length > 0) {
+                    const hasCheckbox = container.querySelector('input[type="checkbox"]') !== null;
+                    questionType = hasCheckbox ? 'multiple_choice' : 'single_choice';
+                    for (const option of options) {
+                        const rawText = getOptionText(option);
+                        optionsData.push(rawText);
+                        optionItems.push({ label: rawText, rawText, element: option });
+                    }
+                } else {
+                    const textInputs = container.querySelectorAll(TEXT_INPUT_SELECTOR);
+                    questionType = 'text';
+                    inputCount = textInputs.length;
+                }
+
+                questionsData.push({
+                    id: questionId,
+                    type: questionType,
+                    question: questionText,
+                    options: optionsData,
+                    optionItems: optionItems,
+                    inputCount: inputCount,
+                    container: container
+                });
+            }
+
+            const aiAnswersMap = await getAiAnswers(apiKey, modelName, questionsData, quizTitle);
             
-            // Tự động điền đáp án từ AI vào trang web
-            questionsData.forEach(q => {
+            for (const q of questionsData) {
                 if (aiAnswersMap[q.id]) {
                     const aiCorrectOptions = aiAnswersMap[q.id];
-                    const options = q.container.querySelectorAll('.rc-Option');
                     
-                    if (options.length > 0) {
-                        options.forEach(option => {
-                            const optionTextNode = option.querySelector('.cds-checkboxAndRadio-labelText, .rc-CML');
-                            const text = optionTextNode ? optionTextNode.innerText.trim() : option.innerText.trim();
-                            const input = option.querySelector('input[type="radio"], input[type="checkbox"]');
-                            
+                    if (q.optionItems.length > 0) {
+                        const normalizedCorrect = aiCorrectOptions.map(opt => String(opt).trim());
+                        q.optionItems.forEach(optItem => {
+                            const input = optItem.element.querySelector('input[type="radio"], input[type="checkbox"]');
                             if (input) {
-                                const shouldBeChecked = aiCorrectOptions.includes(text);
+                                const shouldBeChecked = normalizedCorrect.includes(optItem.label);
                                 if (shouldBeChecked && !input.checked) {
-                                    input.click(); // Chọn đáp án đúng
+                                    input.click();
                                 } else if (!shouldBeChecked && input.checked && input.type === 'checkbox') {
-                                    input.click(); // Bỏ chọn đáp án sai (nếu là checkbox)
+                                    input.click();
                                 }
                             }
                         });
                     } else {
-                        const textInputs = q.container.querySelectorAll('input[type="text"], textarea');
+                        const textInputs = q.container.querySelectorAll(TEXT_INPUT_SELECTOR);
                         if (textInputs.length > 0 && aiCorrectOptions.length > 0) {
-                            textInputs.forEach(input => {
-                                input.value = aiCorrectOptions[0];
-                                input.dispatchEvent(new Event('input', { bubbles: true }));
-                                input.dispatchEvent(new Event('change', { bubbles: true }));
-                            });
+                            for (let idx = 0; idx < textInputs.length; idx++) {
+                                const answerText = aiCorrectOptions[idx] ?? aiCorrectOptions[0];
+                                if (answerText !== undefined) {
+                                    await setFieldAnswer(textInputs[idx], String(answerText));
+                                }
+                            }
                         }
                     }
                 }
-            });
+            }
         } catch (error) {
             alert('Lỗi khi gọi AI: ' + error.message);
             console.error(error);
+        } finally {
+            btn.innerText = btnOriginalText;
+            btn.style.backgroundColor = '#0056D2';
+            btn.disabled = false;
         }
-
-        btn.innerText = btnOriginalText;
-        btn.style.backgroundColor = '#0056D2';
-        btn.disabled = false;
     });
 
     // 3. Hàm gọi AI (Gemini API)
-    function getAiAnswers(apiKey, modelName, questionsData) {
+    function getAiAnswers(apiKey, modelName, questionsData, quizTitle = '') {
         return new Promise((resolve, reject) => {
-            const promptData = questionsData.map(q => ({
-                id: q.id,
-                question: q.question,
-                options: q.options
-            }));
+            const promptData = questionsData.map(q => {
+                const item = { id: q.id, type: q.type, question: q.question };
+                if (q.type === 'text') {
+                    if (q.inputCount > 1) item.input_count = q.inputCount;
+                } else {
+                    item.options = q.options;
+                }
+                return item;
+            });
 
-            const prompt = `Bạn là một chuyên gia giải bài tập. Dưới đây là danh sách các câu hỏi trắc nghiệm.
+            const prompt = `Bạn là một chuyên gia giải bài tập${quizTitle ? ` cho bài "${quizTitle}"` : ''}. Dưới đây là danh sách các câu hỏi trong bài kiểm tra.
 Hãy trả lời đúng định dạng JSON. Mảng JSON phải chứa các object có cấu trúc:
 [
   {
     "id": 1,
-    "correct_options": ["đáp án đúng 1", "đáp án đúng 2"]
+    "correct_options": ["đáp án 1"]
   }
 ]
-Chú ý: correct_options phải chứa CHÍNH XÁC text của các lựa chọn đúng. Có thể có nhiều hơn 1 lựa chọn đúng trong câu hỏi nhiều lựa chọn.
+Quy tắc bắt buộc theo từng loại câu hỏi ("type"):
+- "single_choice": Chọn ĐÚNG 1 đáp án đúng nhất. "correct_options" phải chứa CHÍNH XÁC nguyên văn chuỗi của lựa chọn đúng trong "options".
+- "multiple_choice": Chọn tất cả các đáp án đúng (có thể nhiều hơn 1). "correct_options" phải chứa CHÍNH XÁC nguyên văn chuỗi của các lựa chọn đúng trong "options".
+- "text": Câu hỏi tự luận, bài viết (essay), phản hồi ngắn hoặc điền từ/số. Hãy tự viết câu trả lời trực tiếp, tự nhiên, đúng trọng tâm, tuân thủ yêu cầu độ dài/cấu trúc trong đề bài (ví dụ: 1-2 câu, từ/số ngắn gọn, hoặc chia nhiều đoạn văn cách nhau bằng ký tự xuống dòng "\\n\\n" nếu đề yêu cầu viết nhiều đoạn/essay), dùng ĐÚNG ngôn ngữ của câu hỏi (ví dụ câu hỏi tiếng Anh thì trả lời bằng tiếng Anh), tuyệt đối không dùng ký hiệu markdown như **, #, \`\`\`, và đặt vào mảng "correct_options" (nếu có "input_count" > 1 thì trả về đủ số phần tử tương ứng với từng ô nhập).
 
 Dữ liệu câu hỏi:
 ${JSON.stringify(promptData, null, 2)}`;
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
             const body = JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: {
@@ -314,30 +613,45 @@ ${JSON.stringify(promptData, null, 2)}`;
             GM_xmlhttpRequest({
                 method: "POST",
                 url: url,
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: { "Content-Type": "application/json" },
                 data: body,
                 onload: function(response) {
                     if (response.status >= 200 && response.status < 300) {
                         try {
                             const resJson = JSON.parse(response.responseText);
-                            const textOutput = resJson.candidates[0].content.parts[0].text;
-                            const aiResultArray = JSON.parse(textOutput);
+                            const parts = resJson.candidates?.[0]?.content?.parts || [];
+                            const textPart = parts.find(p => !p.thought && typeof p.text === 'string') || parts[0];
+                            const textOutput = (textPart?.text || '')
+                                .replace(/^```(?:json)?\s*/i, '')
+                                .replace(/\s*```$/i, '')
+                                .trim();
+                            const parsed = JSON.parse(textOutput);
+                            const aiResultArray = Array.isArray(parsed) ? parsed : (parsed.answers || parsed.questions || []);
                             
                             let resultMap = {};
                             aiResultArray.forEach(item => {
-                                resultMap[item.id] = item.correct_options || [];
+                                if (Array.isArray(item.correct_options)) {
+                                    resultMap[item.id] = item.correct_options;
+                                } else if (typeof item.correct_options === 'string') {
+                                    resultMap[item.id] = [item.correct_options];
+                                } else {
+                                    resultMap[item.id] = [];
+                                }
                             });
                             resolve(resultMap);
                         } catch (e) {
                             reject(new Error("Không thể parse kết quả từ AI."));
                         }
                     } else {
-                        reject(new Error(`API Error: ${response.status} - ${response.statusText}`));
+                        let detail = response.statusText || '';
+                        try {
+                            const errJson = JSON.parse(response.responseText);
+                            if (errJson?.error?.message) detail = errJson.error.message;
+                        } catch (_) {}
+                        reject(new Error(`API Error: ${response.status}${detail ? ' - ' + detail : ''}`));
                     }
                 },
-                onerror: function(err) {
+                onerror: function() {
                     reject(new Error("Lỗi kết nối mạng khi gọi API."));
                 }
             });
